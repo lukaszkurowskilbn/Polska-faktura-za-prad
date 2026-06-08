@@ -24,6 +24,7 @@ from .const import (
     MODE_MANUAL,
     PERIOD_MODE_HISTORY,
     PERIOD_MODE_READINGS,
+    PERIOD_MODE_SINCE,
     PERIOD_MODE_ZERO,
 )
 from .core import (
@@ -69,6 +70,8 @@ class BillCoordinator(DataUpdateCoordinator[Bill]):
         self.period_mode: str = PERIOD_MODE_ZERO
         self.period_start: date | None = None
         self.period_end: date | None = None
+        # Punkt zero jako moment w czasie (tryb 'od_odczytu'):
+        self.zero_datetime: datetime | None = None
         # Ręczne odczyty licznika per strefa (tryb 'reczne_odczyty'):
         self.start_readings: dict[Zone, Decimal] = {}
         self.end_readings: dict[Zone, Decimal] = {}
@@ -98,6 +101,10 @@ class BillCoordinator(DataUpdateCoordinator[Bill]):
     @callback
     def set_period_end(self, value: date | None) -> None:
         self.period_end = value
+
+    @callback
+    def set_zero_datetime(self, value: datetime | None) -> None:
+        self.zero_datetime = value
 
     @callback
     def set_start_reading(self, zone: Zone, value: float) -> None:
@@ -146,6 +153,9 @@ class BillCoordinator(DataUpdateCoordinator[Bill]):
         return self.entry.options.get(CONF_ENABLED_OVERRIDES, {})
 
     def _billing_period(self) -> BillingPeriod:
+        # Tryb 'od odczytu do teraz': okres od daty odczytu do bieżącej chwili.
+        if self.period_mode == PERIOD_MODE_SINCE and self.zero_datetime:
+            return BillingPeriod.from_dates(self.zero_datetime, dt_util.now())
         # Priorytet: jawny zakres dat z panelu.
         if self.period_start and self.period_end:
             return BillingPeriod.from_dates(self.period_start, self.period_end)
@@ -175,10 +185,21 @@ class BillCoordinator(DataUpdateCoordinator[Bill]):
                 if start is not None and end is not None:
                     by_zone[zone] = max(Decimal("0"), end - start)
 
-        elif self.period_mode == PERIOD_MODE_HISTORY and self.period_start and self.period_end:
-            # Auto z historii licznika (long-term statistics z recordera).
+        elif self.period_mode == PERIOD_MODE_SINCE and self.zero_datetime:
+            # Od daty+godziny odczytu do teraz — przyrost licznika z historii.
+            start_dt = dt_util.as_local(self.zero_datetime)
+            end_dt = dt_util.now()
             for zone_name, entity_id in self.zone_sensors.items():
-                used = await self._history_consumption(entity_id)
+                used = await self._history_consumption(entity_id, start_dt, end_dt)
+                if used is not None:
+                    by_zone[Zone(zone_name)] = used
+
+        elif self.period_mode == PERIOD_MODE_HISTORY and self.period_start and self.period_end:
+            # Auto z historii licznika dla jawnego zakresu dat.
+            start_dt = dt_util.start_of_local_day(self.period_start)
+            end_dt = dt_util.start_of_local_day(self.period_end) + timedelta(days=1)
+            for zone_name, entity_id in self.zone_sensors.items():
+                used = await self._history_consumption(entity_id, start_dt, end_dt)
                 if used is not None:
                     by_zone[Zone(zone_name)] = used
 
@@ -196,13 +217,15 @@ class BillCoordinator(DataUpdateCoordinator[Bill]):
             by_zone = {Zone.ALL: Decimal("0")}
         return Consumption(by_zone)
 
-    async def _history_consumption(self, entity_id: str) -> Decimal | None:
-        """Zużycie [kWh] z long-term statistics licznika w wybranym zakresie dat.
+    async def _history_consumption(
+        self, entity_id: str, start_dt: datetime, end_dt: datetime
+    ) -> Decimal | None:
+        """Zużycie [kWh] z long-term statistics licznika w zadanym oknie czasu.
 
-        Zwraca sumę przyrostów (change) sensora między 'okres od' a 'okres do'.
+        Zwraca sumę przyrostów (change) sensora między start_dt a end_dt.
         Odporne na różnice API recordera między wersjami HA — w razie błędu None.
         """
-        if not (self.period_start and self.period_end):
+        if start_dt >= end_dt:
             return None
         try:
             from homeassistant.components.recorder import get_instance
@@ -210,16 +233,13 @@ class BillCoordinator(DataUpdateCoordinator[Bill]):
                 statistics_during_period,
             )
 
-            start_dt = dt_util.start_of_local_day(self.period_start)
-            end_dt = dt_util.start_of_local_day(self.period_end) + timedelta(days=1)
-
             stats = await get_instance(self.hass).async_add_executor_job(
                 statistics_during_period,
                 self.hass,
                 start_dt,
                 end_dt,
                 {entity_id},
-                "day",
+                "hour",
                 None,
                 {"change"},
             )

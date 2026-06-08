@@ -89,9 +89,13 @@ wpisujesz zużycie w kWh.
 W panelu wybierasz **okres rozliczeniowy datami „od–do"** oraz **tryb** liczenia
 zużycia (encja select „Tryb zużycia okresu"):
 
-- **Auto z historii** — podajesz zakres dat, a integracja sama pobiera zużycie z
-  historii licznika (long-term statistics z recordera) za ten okres. Wymaga, by
-  licznik miał statystyki sięgające wstecz.
+- **Od odczytu do teraz** — wpisujesz **datę i godzinę odczytu** z faktury (encja
+  „Punkt zero — data i godzina odczytu"). Integracja liczy zużycie i koszt od tej
+  chwili do teraz, z historii licznika. To bieżący, narastający rachunek od
+  ostatniego odczytu — i automatycznie aktualizuje się w czasie.
+- **Auto z historii** — podajesz zakres dat „od–do", a integracja pobiera zużycie z
+  historii licznika (long-term statistics z recordera) za ten zamknięty okres.
+  Wymaga, by licznik miał statystyki sięgające wstecz.
 - **Ręczne odczyty** — wpisujesz odczyt początkowy i końcowy; zużycie = różnica.
 - **Punkt zero** — bieżący odczyt minus punkt zero (jak wyżej).
 

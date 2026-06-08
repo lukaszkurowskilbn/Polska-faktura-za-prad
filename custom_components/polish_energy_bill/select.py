@@ -14,6 +14,7 @@ from .const import (
     MODE_SENSOR,
     PERIOD_MODE_HISTORY,
     PERIOD_MODE_READINGS,
+    PERIOD_MODE_SINCE,
     PERIOD_MODE_ZERO,
     PERIOD_MODES,
 )
@@ -21,6 +22,7 @@ from .coordinator import BillCoordinator
 
 # Czytelne etykiety trybów (opcje selecta to surowe klucze; tłumaczenie w UI).
 LABELS = {
+    PERIOD_MODE_SINCE: "Od odczytu do teraz (data+godzina)",
     PERIOD_MODE_ZERO: "Punkt zero (bieżący − zero)",
     PERIOD_MODE_HISTORY: "Auto z historii (zakres dat)",
     PERIOD_MODE_READINGS: "Ręczne odczyty (koniec − początek)",
