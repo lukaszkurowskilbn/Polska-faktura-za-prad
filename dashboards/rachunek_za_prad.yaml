@@ -89,14 +89,37 @@ views:
             chart_type: donut
             header:
               show: true
-              title: Z czego składa się rachunek (netto)
+              title: Rachunek brutto — wszystkie pozycje
+            apex_config:
+              legend:
+                position: bottom
+              dataLabels:
+                enabled: true
             series:
-              - entity: sensor.rachunek_za_prad_sprzedaz_energii_netto
-                name: Sprzedaż
-              - entity: sensor.rachunek_za_prad_dystrybucja_netto
-                name: Dystrybucja
-              - entity: sensor.rachunek_za_prad_podatki_i_oplaty_netto
-                name: Podatki
+              - entity: sensor.rachunek_za_prad_za_energie_czynna
+                attribute: gross
+                name: Energia czynna
+              - entity: sensor.rachunek_za_prad_oplata_kogeneracyjna
+                attribute: gross
+                name: Kogeneracyjna
+              - entity: sensor.rachunek_za_prad_oplata_oze
+                attribute: gross
+                name: OZE
+              - entity: sensor.rachunek_za_prad_oplata_dystrybucyjna_sieciowa_zmienna
+                attribute: gross
+                name: Dystryb. sieciowa
+              - entity: sensor.rachunek_za_prad_oplata_dystrybucyjna_jakosciowa_zmienna
+                attribute: gross
+                name: Dystryb. jakościowa
+              - entity: sensor.rachunek_za_prad_oplata_stala_za_dystrybucje
+                attribute: gross
+                name: Opłata stała
+              - entity: sensor.rachunek_za_prad_abonament_dystrybucyjny
+                attribute: gross
+                name: Abonament
+              - entity: sensor.rachunek_za_prad_oplata_mocowa_stala
+                attribute: gross
+                name: Opłata mocowa
 
       # ------------------------------------------------ TABELA JAK NA FAKTURZE
       - type: grid
@@ -109,8 +132,8 @@ views:
               {% set s = 'sensor.rachunek_za_prad_do_zaplaty_brutto' %}
               {% set lines = state_attr(s, 'lines') or [] %}
               {% set jm = {'per_kwh':'kWh','per_mwh':'MWh','per_month':'mc','per_day':'dni','flat':'szt'} %}
-              {% set d1 = states('date.rachunek_za_prad_okres_od') %}
-              {% set d2 = states('date.rachunek_za_prad_okres_do') %}
+              {% set d1 = states('date.liczniki_rachunek_za_prad_okres_od') %}
+              {% set d2 = states('date.liczniki_rachunek_za_prad_okres_do') %}
               {% if d1 not in ['unknown','unavailable'] and d2 not in ['unknown','unavailable'] %}
               ### Okres: {{ d1 }} → {{ d2 }}
               {% endif %}
@@ -149,7 +172,7 @@ views:
                   func: max
                   duration: 1d
                 transform: >-
-                  const r = Number(hass.states['sensor.rachunek_za_prad_stawka_zmienna_brutto']?.state);
+                  const r = Number(hass.states['sensor.liczniki_rachunek_za_prad_stawka_zmienna_brutto']?.state);
                   return x * (isFinite(r) && r > 0 ? r : 1.10);
 
           - type: custom:apexcharts-card
@@ -169,7 +192,7 @@ views:
                   type: change
                   period: week
                 transform: >-
-                  const r = Number(hass.states['sensor.rachunek_za_prad_stawka_zmienna_brutto']?.state);
+                  const r = Number(hass.states['sensor.liczniki_rachunek_za_prad_stawka_zmienna_brutto']?.state);
                   return x * (isFinite(r) && r > 0 ? r : 1.10);
 
           - type: custom:apexcharts-card
@@ -189,7 +212,7 @@ views:
                   type: change
                   period: month
                 transform: >-
-                  const r = Number(hass.states['sensor.rachunek_za_prad_stawka_zmienna_brutto']?.state);
+                  const r = Number(hass.states['sensor.liczniki_rachunek_za_prad_stawka_zmienna_brutto']?.state);
                   return x * (isFinite(r) && r > 0 ? r : 1.10);
 
           - type: custom:apexcharts-card
@@ -229,15 +252,15 @@ views:
           - type: entities
             title: Zakres i tryb okresu
             entities:
-              - entity: select.rachunek_za_prad_tryb_zuzycia_okresu
+              - entity: select.liczniki_rachunek_za_prad_tryb_zuzycia_okresu
                 name: Tryb zużycia
-              - entity: date.rachunek_za_prad_okres_od
+              - entity: date.liczniki_rachunek_za_prad_okres_od
                 name: Okres od
-              - entity: date.rachunek_za_prad_okres_do
+              - entity: date.liczniki_rachunek_za_prad_okres_do
                 name: Okres do
-              - entity: number.rachunek_za_prad_odczyt_poczatkowy_calodobowa
+              - entity: number.liczniki_rachunek_za_prad_odczyt_poczatkowy_calodobowa
                 name: Odczyt początkowy (tryb ręczny)
-              - entity: number.rachunek_za_prad_odczyt_koncowy_calodobowa
+              - entity: number.liczniki_rachunek_za_prad_odczyt_koncowy_calodobowa
                 name: Odczyt końcowy (tryb ręczny)
 
           - type: entities
