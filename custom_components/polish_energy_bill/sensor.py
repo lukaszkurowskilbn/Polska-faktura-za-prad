@@ -37,6 +37,7 @@ async def async_setup_entry(
         BillTotalSensor(coordinator, entry, "variable_gross", "Koszt energii zmienny (brutto)"),
         BillTotalSensor(coordinator, entry, "fixed_gross", "Opłaty stałe (brutto)"),
         UnitCostSensor(coordinator, entry),
+        UnitRateSensor(coordinator, entry),
         EnergyCostSensor(coordinator, entry),
         ConsumptionSensor(coordinator, entry),
     ]
@@ -166,6 +167,27 @@ class UnitCostSensor(_BillEntity):
         if self.bill is None:
             return None
         return float(self.bill.variable_unit_gross)
+
+
+class UnitRateSensor(_BillEntity):
+    """Stawka brutto za 1 kWh (część zmienna) [zł/kWh] — mnożnik na wykresach.
+
+    Liczona wprost z cen, niezależnie od zużycia (działa też przy zerze).
+    """
+
+    _attr_native_unit_of_measurement = "zł/kWh"
+    _attr_suggested_display_precision = 4
+
+    def __init__(self, coordinator, entry) -> None:
+        super().__init__(coordinator, entry)
+        self._attr_name = "Stawka zmienna (brutto)"
+        self._attr_unique_id = f"{entry.entry_id}_unit_rate"
+
+    @property
+    def native_value(self):
+        if self.bill is None:
+            return None
+        return float(self.bill.unit_rate_gross)
 
 
 class EnergyCostSensor(_BillEntity):

@@ -3,17 +3,17 @@
 #
 #  JAK DODAĆ (pojawi się jako ikona w lewym pasku, jak "Energia"):
 #  1. Ustawienia → Dashboardy → Dodaj dashboard → "Nowy dashboard od zera".
-#     Nadaj nazwę "Rachunek za prąd", ikonę np. mdi:cash-multiple,
-#     zaznacz "Pokaż w pasku bocznym".
-#  2. Otwórz nowy dashboard → menu (⋮) → Edytuj → menu (⋮) → "Edytor surowej
-#     konfiguracji" (Raw editor) → wklej całą zawartość tego pliku.
+#     Nazwa "Rachunek za prąd", ikona mdi:cash-multiple, zaznacz
+#     "Pokaż w pasku bocznym".
+#  2. Otwórz nowy dashboard → ⋮ → Edytuj → ⋮ → "Edytor surowej konfiguracji"
+#     (Raw editor) → wklej całą zawartość tego pliku.
 #
-#  WYMAGANIA:
-#  - Karta ApexCharts: HACS → Frontend → "apexcharts-card" (lovelace-apexcharts-card).
+#  WYMAGANIA: karta ApexCharts (HACS → Frontend → "apexcharts-card").
 #
-#  ENTITY_ID: poniżej zakładają nazwę instancji "Rachunek za prąd".
-#  Jeśli nazwałeś inaczej, podmień prefiks sensor.rachunek_za_prad_  na swój
-#  (Narzędzia deweloperskie → Stany pokażą realne nazwy encji).
+#  ENTITY_ID zakładają nazwę instancji "Rachunek za prąd". Jeśli nazwałeś
+#  inaczej, podmień prefiks sensor./number./date./select.rachunek_za_prad_
+#  (Narzędzia deweloperskie → Stany pokażą realne nazwy). Licznik energii w
+#  wykresach to sensor.pge_total_energy_consumption — też podmień na swój.
 # =============================================================================
 
 title: Rachunek za prąd
@@ -31,14 +31,11 @@ views:
           - type: heading
             heading: Ile płacę
             heading_style: title
-
           - type: tile
             entity: sensor.rachunek_za_prad_do_zaplaty_brutto
             name: Do zapłaty (brutto)
             icon: mdi:cash
             color: red
-            vertical: false
-
           - type: grid
             columns: 2
             square: false
@@ -66,7 +63,6 @@ views:
           - type: heading
             heading: Za co płacę
             heading_style: title
-
           - type: grid
             columns: 2
             square: false
@@ -89,8 +85,6 @@ views:
                 entity: sensor.rachunek_za_prad_oplaty_stale_brutto
                 name: Opłaty stałe (miesięczne)
                 icon: mdi:calendar-clock
-
-          # Czytelny podział: ile to energia, ile dystrybucja, ile podatki.
           - type: custom:apexcharts-card
             chart_type: donut
             header:
@@ -103,6 +97,29 @@ views:
                 name: Dystrybucja
               - entity: sensor.rachunek_za_prad_podatki_i_oplaty_netto
                 name: Podatki
+
+      # ------------------------------------------------ TABELA JAK NA FAKTURZE
+      - type: grid
+        cards:
+          - type: heading
+            heading: Rozbicie pozycji (jak na fakturze)
+            heading_style: title
+          - type: markdown
+            content: |
+              {% set s = 'sensor.rachunek_za_prad_do_zaplaty_brutto' %}
+              {% set lines = state_attr(s, 'lines') or [] %}
+              {% set jm = {'per_kwh':'kWh','per_mwh':'MWh','per_month':'mc','per_day':'dni','flat':'szt'} %}
+              {% set d1 = states('date.rachunek_za_prad_okres_od') %}
+              {% set d2 = states('date.rachunek_za_prad_okres_do') %}
+              {% if d1 not in ['unknown','unavailable'] and d2 not in ['unknown','unavailable'] %}
+              ### Okres: {{ d1 }} → {{ d2 }}
+              {% endif %}
+              | Pozycja | Ilość | J.m. | Cena netto | Netto | VAT | Brutto |
+              |:--|--:|:--:|--:|--:|--:|--:|
+              {% for l in lines -%}
+              | {{ l.name }} | {{ '%.3f'|format(l.quantity)|replace('.',',') }} | {{ jm.get(l.unit, l.unit) }} | {{ '%.5f'|format(l.rate)|replace('.',',') }} | {{ '%.2f'|format(l.net)|replace('.',',') }} | {{ (l.vat_rate*100)|round|int }}% | {{ '%.2f'|format(l.gross)|replace('.',',') }} |
+              {% endfor -%}
+              | **OGÓŁEM** | | | | **{{ '%.2f'|format(state_attr(s,'net') or 0)|replace('.',',') }}** | **{{ '%.2f'|format(state_attr(s,'vat') or 0)|replace('.',',') }}** | **{{ '%.2f'|format(states(s)|float(0))|replace('.',',') }}** |
 
       # ------------------------------------------------------- JAK ROŚNIE W CZASIE
       - type: grid
@@ -121,15 +138,19 @@ views:
               chart:
                 height: 240
             series:
-              - entity: sensor.rachunek_za_prad_koszt_energii_narastajaco
+              - entity: sensor.pge_total_energy_consumption
                 name: Koszt dzienny
                 type: column
+                unit: zł
                 statistics:
                   type: change
                   period: day
                 group_by:
                   func: max
                   duration: 1d
+                transform: >-
+                  const r = Number(hass.states['sensor.rachunek_za_prad_stawka_zmienna_brutto']?.state);
+                  return x * (isFinite(r) && r > 0 ? r : 1.10);
 
           - type: custom:apexcharts-card
             graph_span: 12w
@@ -140,12 +161,16 @@ views:
               chart:
                 height: 240
             series:
-              - entity: sensor.rachunek_za_prad_koszt_energii_narastajaco
+              - entity: sensor.pge_total_energy_consumption
                 name: Koszt tygodniowy
                 type: column
+                unit: zł
                 statistics:
                   type: change
                   period: week
+                transform: >-
+                  const r = Number(hass.states['sensor.rachunek_za_prad_stawka_zmienna_brutto']?.state);
+                  return x * (isFinite(r) && r > 0 ? r : 1.10);
 
           - type: custom:apexcharts-card
             graph_span: 12month
@@ -156,15 +181,17 @@ views:
               chart:
                 height: 240
             series:
-              - entity: sensor.rachunek_za_prad_koszt_energii_narastajaco
+              - entity: sensor.pge_total_energy_consumption
                 name: Koszt miesięczny
                 type: column
+                unit: zł
                 statistics:
                   type: change
                   period: month
+                transform: >-
+                  const r = Number(hass.states['sensor.rachunek_za_prad_stawka_zmienna_brutto']?.state);
+                  return x * (isFinite(r) && r > 0 ? r : 1.10);
 
-          # Zużycie z realnego licznika (ma historię → dane widać od razu).
-          # Podmień encję, jeśli Twój licznik nazywa się inaczej.
           - type: custom:apexcharts-card
             graph_span: 30d
             header:
@@ -189,14 +216,29 @@ views:
       - type: grid
         cards:
           - type: heading
-            heading: Punkt zero i stawki
+            heading: Zakres, tryb, punkt zero i stawki
             heading_style: title
 
           - type: markdown
             content: >
-              **Punkt zero** = odczyt licznika, od którego liczymy zużycie.
-              Naciśnij „Ustaw jako zero" na początku okresu rozliczeniowego
-              albo wpisz odczyt ręcznie w polu „Odczyt zero".
+              **Zakres dat i tryb.** Wybierz, jak liczyć zużycie w okresie:
+              *Auto z historii* (podajesz zakres dat, integracja sama pobiera
+              zużycie z historii licznika), *Ręczne odczyty* (wpisujesz odczyt
+              początkowy i końcowy) lub *Punkt zero* (bieżący odczyt − zero).
+
+          - type: entities
+            title: Zakres i tryb okresu
+            entities:
+              - entity: select.rachunek_za_prad_tryb_zuzycia_okresu
+                name: Tryb zużycia
+              - entity: date.rachunek_za_prad_okres_od
+                name: Okres od
+              - entity: date.rachunek_za_prad_okres_do
+                name: Okres do
+              - entity: number.rachunek_za_prad_odczyt_poczatkowy_calodobowa
+                name: Odczyt początkowy (tryb ręczny)
+              - entity: number.rachunek_za_prad_odczyt_koncowy_calodobowa
+                name: Odczyt końcowy (tryb ręczny)
 
           - type: entities
             title: Punkt zero
@@ -208,5 +250,5 @@ views:
 
           - type: markdown
             content: >
-              **Stawki** — zmień gdy URE/sprzedawca podniesie ceny. Wartości
-              netto, rachunek przeliczy się od razu. (Encje „Stawka: …")
+              **Stawki** — zmień, gdy URE/sprzedawca podniesie ceny (encje
+              „Stawka: …"). Wartości netto, rachunek przeliczy się od razu.

@@ -84,6 +84,21 @@ Zużycie = bieżący odczyt − punkt zero (nigdy ujemne). Na początku nowego o
 naciskasz „Ustaw jako zero" i koszty startują od nowa. W trybie ręcznym po prostu
 wpisujesz zużycie w kWh.
 
+## Zakres dat i tryby okresu
+
+W panelu wybierasz **okres rozliczeniowy datami „od–do"** oraz **tryb** liczenia
+zużycia (encja select „Tryb zużycia okresu"):
+
+- **Auto z historii** — podajesz zakres dat, a integracja sama pobiera zużycie z
+  historii licznika (long-term statistics z recordera) za ten okres. Wymaga, by
+  licznik miał statystyki sięgające wstecz.
+- **Ręczne odczyty** — wpisujesz odczyt początkowy i końcowy; zużycie = różnica.
+- **Punkt zero** — bieżący odczyt minus punkt zero (jak wyżej).
+
+Z dat liczona jest też liczba dni i miesięcy okresu (do opłat stałych) — okres
+kalendarzowy, więc np. 31.01→31.03 to dokładnie 2 miesiące (opłaty stałe ×2),
+zgodnie z fakturą. Wybrany zakres pojawia się w nagłówku tabeli „jak na fakturze".
+
 ## Osobny panel (dashboard)
 
 W repo jest gotowy widok `dashboards/rachunek_za_prad.yaml` — osobny dashboard,

@@ -6,7 +6,7 @@ from typing import Final
 
 DOMAIN: Final = "polish_energy_bill"
 
-PLATFORMS: Final = ["sensor", "number", "button"]
+PLATFORMS: Final = ["sensor", "number", "button", "select", "date"]
 
 # --- klucze config entry (data) ---
 CONF_NAME: Final = "name"
@@ -22,6 +22,16 @@ CONF_BILLING_MONTHS: Final = "billing_months"       # float
 
 MODE_SENSOR: Final = "sensor"
 MODE_MANUAL: Final = "manual"
+
+# Tryb ustalania zużycia w okresie (wybierany w panelu, encja select):
+PERIOD_MODE_ZERO: Final = "punkt_zero"        # bieżący odczyt - punkt zero
+PERIOD_MODE_HISTORY: Final = "historia"       # auto z historii licznika (recorder)
+PERIOD_MODE_READINGS: Final = "reczne_odczyty"  # różnica odczyt końcowy - początkowy
+PERIOD_MODES: Final = [
+    PERIOD_MODE_ZERO,
+    PERIOD_MODE_HISTORY,
+    PERIOD_MODE_READINGS,
+]
 
 DEFAULT_BILLING_MONTHS: Final = 1.0
 

@@ -162,6 +162,25 @@ class BillingPeriod:
     def __post_init__(self) -> None:
         object.__setattr__(self, "months", _dec(self.months))
 
+    @classmethod
+    def from_dates(cls, start, end) -> "BillingPeriod":
+        """Liczy okres z zakresu dat (date/datetime).
+
+        - days  = różnica dni (min. 1),
+        - months = miesiące kalendarzowe + ułamek z dni, tak by typowy okres
+          rozliczeniowy trafiał w naliczenia faktury (np. 31.01→31.03 = 2,0).
+        """
+        days = (end - start).days
+        if days < 1:
+            days = 1
+        months = (
+            Decimal((end.year - start.year) * 12 + (end.month - start.month))
+            + Decimal(end.day - start.day) / Decimal("30")
+        )
+        if months <= 0:
+            months = Decimal(days) / Decimal("30.4375")
+        return cls(days=days, months=months)
+
 
 @dataclass(frozen=True, slots=True)
 class Consumption:

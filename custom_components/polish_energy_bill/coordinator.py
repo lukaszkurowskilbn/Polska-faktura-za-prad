@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import calendar
 import logging
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_BILLING_DAYS,
@@ -21,6 +22,9 @@ from .const import (
     DEFAULT_BILLING_MONTHS,
     DOMAIN,
     MODE_MANUAL,
+    PERIOD_MODE_HISTORY,
+    PERIOD_MODE_READINGS,
+    PERIOD_MODE_ZERO,
 )
 from .core import (
     Bill,
@@ -61,6 +65,14 @@ class BillCoordinator(DataUpdateCoordinator[Bill]):
         # Rejestr encji baseline, by przycisk mógł je ustawić:
         self._baseline_entities: dict[Zone, Any] = {}
 
+        # Zakres dat + tryb ustalania zużycia w okresie:
+        self.period_mode: str = PERIOD_MODE_ZERO
+        self.period_start: date | None = None
+        self.period_end: date | None = None
+        # Ręczne odczyty licznika per strefa (tryb 'reczne_odczyty'):
+        self.start_readings: dict[Zone, Decimal] = {}
+        self.end_readings: dict[Zone, Decimal] = {}
+
     # --- API dla encji number ---
 
     @callback
@@ -74,6 +86,26 @@ class BillCoordinator(DataUpdateCoordinator[Bill]):
     @callback
     def set_baseline(self, zone: Zone, value: float) -> None:
         self.baseline[zone] = Decimal(str(value))
+
+    @callback
+    def set_period_mode(self, mode: str) -> None:
+        self.period_mode = mode
+
+    @callback
+    def set_period_start(self, value: date | None) -> None:
+        self.period_start = value
+
+    @callback
+    def set_period_end(self, value: date | None) -> None:
+        self.period_end = value
+
+    @callback
+    def set_start_reading(self, zone: Zone, value: float) -> None:
+        self.start_readings[zone] = Decimal(str(value))
+
+    @callback
+    def set_end_reading(self, zone: Zone, value: float) -> None:
+        self.end_readings[zone] = Decimal(str(value))
 
     @callback
     def register_baseline_entity(self, zone: Zone, entity: Any) -> None:
@@ -114,6 +146,9 @@ class BillCoordinator(DataUpdateCoordinator[Bill]):
         return self.entry.options.get(CONF_ENABLED_OVERRIDES, {})
 
     def _billing_period(self) -> BillingPeriod:
+        # Priorytet: jawny zakres dat z panelu.
+        if self.period_start and self.period_end:
+            return BillingPeriod.from_dates(self.period_start, self.period_end)
         months = Decimal(
             str(self.entry.options.get(CONF_BILLING_MONTHS, DEFAULT_BILLING_MONTHS))
         )
@@ -125,22 +160,82 @@ class BillCoordinator(DataUpdateCoordinator[Bill]):
 
     # --- odczyt zużycia ---
 
-    def _read_consumption(self) -> Consumption:
+    async def _read_consumption(self) -> Consumption:
         by_zone: dict[Zone, Decimal] = {}
+
         if self.mode == MODE_MANUAL:
             by_zone = dict(self.manual_consumption)
+
+        elif self.period_mode == PERIOD_MODE_READINGS:
+            # Różnica: odczyt końcowy - początkowy (per strefa).
+            for zone_name in self.zone_sensors:
+                zone = Zone(zone_name)
+                start = self.start_readings.get(zone)
+                end = self.end_readings.get(zone)
+                if start is not None and end is not None:
+                    by_zone[zone] = max(Decimal("0"), end - start)
+
+        elif self.period_mode == PERIOD_MODE_HISTORY and self.period_start and self.period_end:
+            # Auto z historii licznika (long-term statistics z recordera).
+            for zone_name, entity_id in self.zone_sensors.items():
+                used = await self._history_consumption(entity_id)
+                if used is not None:
+                    by_zone[Zone(zone_name)] = used
+
         else:
+            # Punkt zero: bieżący odczyt - punkt zero.
             for zone_name, entity_id in self.zone_sensors.items():
                 value = self._read_sensor(entity_id)
                 if value is None:
                     continue
                 zone = Zone(zone_name)
-                # Zużycie liczone od punktu zero (bazowego odczytu licznika).
                 base = self.baseline.get(zone, Decimal("0"))
                 by_zone[zone] = max(Decimal("0"), value - base)
+
         if not by_zone:
             by_zone = {Zone.ALL: Decimal("0")}
         return Consumption(by_zone)
+
+    async def _history_consumption(self, entity_id: str) -> Decimal | None:
+        """Zużycie [kWh] z long-term statistics licznika w wybranym zakresie dat.
+
+        Zwraca sumę przyrostów (change) sensora między 'okres od' a 'okres do'.
+        Odporne na różnice API recordera między wersjami HA — w razie błędu None.
+        """
+        if not (self.period_start and self.period_end):
+            return None
+        try:
+            from homeassistant.components.recorder import get_instance
+            from homeassistant.components.recorder.statistics import (
+                statistics_during_period,
+            )
+
+            start_dt = dt_util.start_of_local_day(self.period_start)
+            end_dt = dt_util.start_of_local_day(self.period_end) + timedelta(days=1)
+
+            stats = await get_instance(self.hass).async_add_executor_job(
+                statistics_during_period,
+                self.hass,
+                start_dt,
+                end_dt,
+                {entity_id},
+                "day",
+                None,
+                {"change"},
+            )
+        except Exception as err:  # noqa: BLE001 - API recordera bywa zmienne
+            _LOGGER.warning("Nie udało się pobrać historii dla %s: %s", entity_id, err)
+            return None
+
+        series = stats.get(entity_id) if stats else None
+        if not series:
+            return None
+        total = Decimal("0")
+        for row in series:
+            change = row.get("change")
+            if change is not None:
+                total += Decimal(str(change))
+        return total if total > 0 else Decimal("0")
 
     def _read_sensor(self, entity_id: str) -> Decimal | None:
         state = self.hass.states.get(entity_id)
@@ -159,7 +254,7 @@ class BillCoordinator(DataUpdateCoordinator[Bill]):
             rate_overrides=self.rate_overrides,
             enabled_overrides=self.enabled_overrides,
         )
-        consumption = self._read_consumption()
+        consumption = await self._read_consumption()
         period = self._billing_period()
         return calculate(profile, consumption, period)
 

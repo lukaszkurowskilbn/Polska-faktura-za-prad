@@ -92,8 +92,23 @@ class Bill:
     def variable_unit_gross(self) -> Decimal:
         """Średni koszt brutto 1 kWh w części zmiennej [zł/kWh]."""
         if self.consumption_kwh == 0:
-            return Decimal("0")
+            return self.unit_rate_gross
         return (self.variable_gross / self.consumption_kwh).quantize(Decimal("0.0001"))
+
+    @property
+    def unit_rate_gross(self) -> Decimal:
+        """Stawka brutto za 1 kWh części zmiennej, liczona wprost z cen [zł/kWh].
+
+        Niezależna od poziomu zużycia (działa też przy zużyciu 0) — używana
+        jako mnożnik na wykresach kosztu opartych o realny licznik.
+        """
+        total = Decimal("0")
+        for l in self.lines:
+            if l.unit is Unit.PER_KWH:
+                total += l.rate * (Decimal("1") + l.vat_rate)
+            elif l.unit is Unit.PER_MWH:
+                total += (l.rate / Decimal("1000")) * (Decimal("1") + l.vat_rate)
+        return total.quantize(Decimal("0.0001"))
 
     def as_dict(self) -> dict:
         return {

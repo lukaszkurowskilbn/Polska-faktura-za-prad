@@ -46,6 +46,10 @@ async def async_setup_entry(
         entities += [
             BaselineNumber(coordinator, entry, zone) for zone in profile.zones
         ]
+        # Ręczne odczyty licznika (tryb 'reczne_odczyty').
+        for zone in profile.zones:
+            entities.append(ReadingNumber(coordinator, entry, zone, "start", "Odczyt początkowy"))
+            entities.append(ReadingNumber(coordinator, entry, zone, "end", "Odczyt końcowy"))
 
     async_add_entities(entities)
 
@@ -174,5 +178,51 @@ class BaselineNumber(_Base):
     async def async_set_native_value(self, value: float) -> None:
         self._attr_native_value = value
         self.coordinator.set_baseline(self._zone, value)
+        self.async_write_ha_state()
+        await self.coordinator.async_request_refresh()
+
+
+class ReadingNumber(_Base):
+    """Ręczny odczyt licznika [kWh] — początkowy lub końcowy okresu."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_mode = NumberMode.BOX
+    _attr_native_min_value = 0.0
+    _attr_native_max_value = 100000000.0
+    _attr_native_step = 0.001
+    _attr_native_unit_of_measurement = "kWh"
+
+    def __init__(
+        self,
+        coordinator: BillCoordinator,
+        entry: ConfigEntry,
+        zone: Zone,
+        which: str,
+        label: str,
+    ) -> None:
+        super().__init__(coordinator, entry)
+        self._zone = zone
+        self._which = which  # "start" | "end"
+        self._attr_name = f"{label} ({ZONE_LABEL.get(zone, zone.value)})"
+        self._attr_unique_id = f"{entry.entry_id}_reading_{which}_{zone.value}"
+        self._attr_native_value = 0.0
+
+    def _push(self, value: float) -> None:
+        if self._which == "start":
+            self.coordinator.set_start_reading(self._zone, value)
+        else:
+            self.coordinator.set_end_reading(self._zone, value)
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last = await self.async_get_last_number_data()
+        if last is not None and last.native_value is not None:
+            self._attr_native_value = last.native_value
+        self._push(self._attr_native_value)
+        await self.coordinator.async_request_refresh()
+
+    async def async_set_native_value(self, value: float) -> None:
+        self._attr_native_value = value
+        self._push(value)
         self.async_write_ha_state()
         await self.coordinator.async_request_refresh()
