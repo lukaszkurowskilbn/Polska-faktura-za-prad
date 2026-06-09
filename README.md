@@ -124,6 +124,7 @@ instrukcje i podmiana `entity_id`, jeśli nazwałeś instancję inaczej niż „
 | `pge_g11`   | G11    | Stawki **1:1 z realnej faktury PGE 2026**.                   |
 | `pge_g12`   | G12    | Stawki strefowe **przykładowe** — podmień swoimi.            |
 | `pge_g12w`  | G12w   | Jw., taryfa z weekendami w taniej strefie.                   |
+| `tauron_g12w`  | G12w   | TAURON Sprzedaż — taryfa G12w (rok 2026).                   |
 
 ## Testy
 
