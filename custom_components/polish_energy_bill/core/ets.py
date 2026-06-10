@@ -78,8 +78,17 @@ class EtsEstimate:
     co2_kg: Decimal           # masa CO₂ stojąca za zużyciem [kg]
     share_of_bill: Decimal    # udział ETS w rachunku brutto [ułamek 0..1]
     share_of_energy: Decimal  # udział ETS w koszcie energii czynnej brutto [ułamek]
-    percent_gross: Decimal    # koszt ETS brutto wg metody % [PLN] (porównawczo)
-    emission_gross: Decimal   # koszt ETS brutto wg metody emisyjnej [PLN]
+    # Obie metody rozbite na netto/VAT/brutto — do tabelki porównawczej:
+    percent_net: Decimal
+    percent_vat: Decimal
+    percent_gross: Decimal
+    emission_net: Decimal
+    emission_vat: Decimal
+    emission_gross: Decimal
+    # Baza i parametry (do pokazania „z czego wynika"):
+    energy_net: Decimal       # netto pozycji energia czynna (podstawa metody %)
+    energy_gross: Decimal
+    bill_gross: Decimal
 
     def as_dict(self) -> dict:
         return {
@@ -92,8 +101,15 @@ class EtsEstimate:
             "share_of_bill": float(self.share_of_bill),
             "share_of_energy": float(self.share_of_energy),
             "share_of_bill_pct": float((self.share_of_bill * 100).quantize(Decimal("0.1"))),
+            "percent_net": float(self.percent_net),
+            "percent_vat": float(self.percent_vat),
             "percent_gross": float(self.percent_gross),
+            "emission_net": float(self.emission_net),
+            "emission_vat": float(self.emission_vat),
             "emission_gross": float(self.emission_gross),
+            "energy_net": float(self.energy_net),
+            "energy_gross": float(self.energy_gross),
+            "bill_gross": float(self.bill_gross),
         }
 
 
@@ -143,20 +159,20 @@ def estimate(
     bill_gross = _dec(bill_gross)
     one_plus_vat = Decimal("1") + energy_vat_rate
 
-    # Koszt obiema metodami (porównawczo na wykresie/atrybutach).
-    p_net, _p_vat, percent_gross = _grossed(_percent_net(energy_net, params), energy_vat_rate)
-    e_net, _e_vat, emission_gross = _grossed(
+    # Koszt obiema metodami (porównawczo — tabelka, wykres, atrybuty).
+    p_net, p_vat, percent_gross = _grossed(_percent_net(energy_net, params), energy_vat_rate)
+    e_net, e_vat, emission_gross = _grossed(
         _emission_net(consumption_kwh, params), energy_vat_rate
     )
 
     if method is EtsMethod.PERCENT:
-        net, vat, gross = _grossed(_percent_net(energy_net, params), energy_vat_rate)
+        net, vat, gross = p_net, p_vat, percent_gross
         # Stawka z ceny: udział × stawka energii czynnej, brutto. Działa przy zużyciu 0.
         rate_gross = (params.percent_share * energy_unit_rate_net * one_plus_vat).quantize(
             Decimal("0.0001")
         )
     else:
-        net, vat, gross = _grossed(_emission_net(consumption_kwh, params), energy_vat_rate)
+        net, vat, gross = e_net, e_vat, emission_gross
         rate_per_kwh_net = (
             params.emission_factor * params.eua_price_eur * params.eur_pln / KWH_PER_MWH
         )
@@ -175,6 +191,13 @@ def estimate(
         co2_kg=co2_kg,
         share_of_bill=share_of_bill,
         share_of_energy=share_of_energy,
+        percent_net=p_net,
+        percent_vat=p_vat,
         percent_gross=percent_gross,
+        emission_net=e_net,
+        emission_vat=e_vat,
         emission_gross=emission_gross,
+        energy_net=round_pln(energy_net),
+        energy_gross=round_pln(energy_gross),
+        bill_gross=round_pln(bill_gross),
     )

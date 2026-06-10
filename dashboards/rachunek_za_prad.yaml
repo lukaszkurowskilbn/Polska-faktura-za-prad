@@ -254,17 +254,43 @@ views:
       # =====================================================================
       #  ETS — ile w rachunku to koszty uprawnień do emisji CO₂ (DOBUDOWANE).
       #
-      #  UWAGA o prefiksach (jak w nagłówku pliku): w tej instancji SENSORY
-      #  kosztu/udziału mają prefiks sensor.rachunek_za_prad_, a sensor STAWKI
-      #  oraz encje number/select prefiks ...liczniki_rachunek_za_prad_.
-      #  Jeśli u Ciebie jest inaczej — sprawdź realne nazwy w
-      #  Narzędzia deweloperskie → Stany i podmień.
+      #  UWAGA o prefiksach (jak w nagłówku pliku): w tej instancji WSZYSTKIE
+      #  encje ETS (sensory, number, select) mają prefiks
+      #  ...liczniki_rachunek_za_prad_. Tylko stare sensory rachunku
+      #  (do_zaplaty itp.) są bez 'liczniki_'. Jeśli u Ciebie inaczej —
+      #  sprawdź realne nazwy w Narzędzia deweloperskie → Stany i podmień.
       # =====================================================================
       - type: grid
         cards:
           - type: heading
             heading: Ile w rachunku to ETS (CO₂)
             heading_style: title
+          - type: markdown
+            content: |
+              {% set c = 'sensor.liczniki_rachunek_za_prad_ets_koszt_w_rachunku_brutto' %}
+              {% set pg = state_attr(c,'percent_gross')|float(0) %}
+              {% set eg = state_attr(c,'emission_gross')|float(0) %}
+              {% set pn = state_attr(c,'percent_net')|float(pg/1.23) %}
+              {% set pv = state_attr(c,'percent_vat')|float(pg-pn) %}
+              {% set en = state_attr(c,'emission_net')|float(eg/1.23) %}
+              {% set ev = state_attr(c,'emission_vat')|float(eg-en) %}
+              {% set en0 = state_attr(c,'energy_net')|float(states('sensor.rachunek_za_prad_za_energie_czynna')|float(0)) %}
+              {% set bill = state_attr(c,'bill_gross')|float(states('sensor.rachunek_za_prad_do_zaplaty_brutto')|float(0)) %}
+              {% set co2 = state_attr(c,'co2_kg')|float(0) %}
+              {% set m = state_attr(c,'method') %}
+              {% set ud = states('number.liczniki_rachunek_za_prad_ets_udzial_w_cenie_energii')|float(0) %}
+              {% set eua = states('number.liczniki_rachunek_za_prad_ets_cena_uprawnienia_eua')|float(0) %}
+              {% set kurs = states('number.liczniki_rachunek_za_prad_ets_kurs_eur_pln')|float(0) %}
+              {% set ps = (pg/bill*100) if bill>0 else 0 %}
+              {% set es = (eg/bill*100) if bill>0 else 0 %}
+              ### Rozbicie ETS — skąd się bierze koszt uprawnień CO₂
+              | Metoda | Podstawa | Netto | VAT | Brutto | Udział w rachunku |
+              |:--|:--|--:|--:|--:|--:|
+              | Udział % w cenie energii{{ ' — aktywna' if m=='procent' else '' }} | energia czynna {{ '%.2f'|format(en0)|replace('.',',') }} zł × {{ '%.0f'|format(ud)|replace('.',',') }} % | {{ '%.2f'|format(pn)|replace('.',',') }} | {{ '%.2f'|format(pv)|replace('.',',') }} | **{{ '%.2f'|format(pg)|replace('.',',') }}** | {{ '%.1f'|format(ps)|replace('.',',') }} % |
+              | Emisja CO₂ × cena EUA × kurs{{ ' — aktywna' if m=='emisja' else '' }} | {{ '%.1f'|format(co2)|replace('.',',') }} kg → {{ '%.2f'|format(eua)|replace('.',',') }} EUR/t × {{ '%.2f'|format(kurs)|replace('.',',') }} | {{ '%.2f'|format(en)|replace('.',',') }} | {{ '%.2f'|format(ev)|replace('.',',') }} | **{{ '%.2f'|format(eg)|replace('.',',') }}** | {{ '%.1f'|format(es)|replace('.',',') }} % |
+              | **Rachunek brutto** | | | | **{{ '%.2f'|format(bill)|replace('.',',') }}** | |
+
+              ETS jest zaszyty w cenie energii czynnej — to szacunek, nie osobna pozycja faktury. Reszta rachunku (dystrybucja, opłaty stałe) nie zawiera ETS, dlatego udział w całym rachunku jest mniejszy niż w samej cenie energii.
           - type: entities
             title: Metoda i parametry ETS
             entities:
@@ -276,39 +302,24 @@ views:
                 name: Cena uprawnienia EUA (rynek)
               - entity: number.liczniki_rachunek_za_prad_ets_kurs_eur_pln
                 name: Kurs EUR/PLN
-              - entity: number.liczniki_rachunek_za_prad_ets_wskaznik_emisji_co
+              - entity: number.liczniki_rachunek_za_prad_ets_wskaznik_emisji_co2
                 name: Wskaźnik emisji CO₂
-          - type: markdown
-            content: >
-              {% set c =
-              'sensor.rachunek_za_prad_ets_koszt_w_rachunku_brutto' %}
-
-              {% set a = state_attr(c, 'method') %}
-
-              Metoda: **{{ 'udział % w cenie energii' if a == 'procent' else
-              'emisja CO₂ × cena EUA × kurs' }}**.
-              Koszt ETS wg metody procentowej: **{{
-              '%.2f'|format(state_attr(c,'percent_gross') or
-              0)|replace('.',',') }} zł**, wg metody emisyjnej: **{{
-              '%.2f'|format(state_attr(c,'emission_gross') or
-              0)|replace('.',',') }} zł** (brutto). ETS jest zaszyty w cenie
-              energii czynnej — to szacunek, nie osobna pozycja faktury.
           - type: grid
             columns: 3
             square: false
             cards:
               - type: tile
-                entity: sensor.rachunek_za_prad_ets_koszt_w_rachunku_brutto
+                entity: sensor.liczniki_rachunek_za_prad_ets_koszt_w_rachunku_brutto
                 name: Koszt ETS (brutto)
                 icon: mdi:molecule-co2
                 color: deep-orange
               - type: tile
-                entity: sensor.rachunek_za_prad_ets_udzial_w_rachunku
+                entity: sensor.liczniki_rachunek_za_prad_ets_udzial_w_rachunku
                 name: Udział w rachunku
                 icon: mdi:chart-donut
                 color: deep-orange
               - type: tile
-                entity: sensor.rachunek_za_prad_ets_emisja_co
+                entity: sensor.liczniki_rachunek_za_prad_ets_emisja_co2
                 name: Emisja CO₂
                 icon: mdi:cloud-outline
                 color: grey
@@ -323,13 +334,13 @@ views:
               dataLabels:
                 enabled: true
             series:
-              - entity: sensor.rachunek_za_prad_ets_koszt_w_rachunku_brutto
+              - entity: sensor.liczniki_rachunek_za_prad_ets_koszt_w_rachunku_brutto
                 name: ETS (CO₂)
               - entity: sensor.rachunek_za_prad_do_zaplaty_brutto
                 name: Reszta rachunku
                 transform: >-
                   return x -
-                  Number(hass.states['sensor.rachunek_za_prad_ets_koszt_w_rachunku_brutto']?.state
+                  Number(hass.states['sensor.liczniki_rachunek_za_prad_ets_koszt_w_rachunku_brutto']?.state
                   || 0);
           - type: custom:apexcharts-card
             graph_span: 30d
