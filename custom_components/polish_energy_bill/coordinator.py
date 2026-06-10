@@ -20,7 +20,13 @@ from .const import (
     CONF_MODE,
     CONF_ZONE_SENSORS,
     DEFAULT_BILLING_MONTHS,
+    DEFAULT_ETS_EMISSION_FACTOR,
+    DEFAULT_ETS_EUA_PRICE,
+    DEFAULT_ETS_EUR_PLN,
+    DEFAULT_ETS_PERCENT,
     DOMAIN,
+    ETS_ENERGY_KEY_PREFIX,
+    ETS_METHOD_PERCENT,
     MODE_MANUAL,
     PERIOD_MODE_HISTORY,
     PERIOD_MODE_READINGS,
@@ -31,9 +37,14 @@ from .core import (
     Bill,
     BillingPeriod,
     Consumption,
+    EtsEstimate,
+    EtsMethod,
+    EtsParams,
     TariffProfile,
+    Unit,
     Zone,
     calculate,
+    estimate_ets,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -76,6 +87,14 @@ class BillCoordinator(DataUpdateCoordinator[Bill]):
         self.start_readings: dict[Zone, Decimal] = {}
         self.end_readings: dict[Zone, Decimal] = {}
 
+        # ETS (koszty uprawnień do emisji CO₂) — żywy stan z encji number/select.
+        # Wartości startowe; podmieniane w UI, bo zmieniają się w czasie.
+        self.ets_method: str = ETS_METHOD_PERCENT
+        self.ets_percent: Decimal = Decimal(str(DEFAULT_ETS_PERCENT))
+        self.ets_emission_factor: Decimal = Decimal(str(DEFAULT_ETS_EMISSION_FACTOR))
+        self.ets_eua_price: Decimal = Decimal(str(DEFAULT_ETS_EUA_PRICE))
+        self.ets_eur_pln: Decimal = Decimal(str(DEFAULT_ETS_EUR_PLN))
+
     # --- API dla encji number ---
 
     @callback
@@ -117,6 +136,82 @@ class BillCoordinator(DataUpdateCoordinator[Bill]):
     @callback
     def register_baseline_entity(self, zone: Zone, entity: Any) -> None:
         self._baseline_entities[zone] = entity
+
+    # --- API dla encji ETS ---
+
+    @callback
+    def set_ets_method(self, method: str) -> None:
+        self.ets_method = method
+
+    @callback
+    def set_ets_percent(self, value: float) -> None:
+        self.ets_percent = Decimal(str(value))
+
+    @callback
+    def set_ets_emission_factor(self, value: float) -> None:
+        self.ets_emission_factor = Decimal(str(value))
+
+    @callback
+    def set_ets_eua_price(self, value: float) -> None:
+        self.ets_eua_price = Decimal(str(value))
+
+    @callback
+    def set_ets_eur_pln(self, value: float) -> None:
+        self.ets_eur_pln = Decimal(str(value))
+
+    def ets_estimate(self) -> EtsEstimate | None:
+        """Szacuje koszt ETS jako nakładkę na bieżący rachunek.
+
+        Bazuje na gotowym Bill (self.data) i edytowalnych parametrach ETS.
+        Nie modyfikuje rachunku. Zwraca None, dopóki nie ma policzonego rachunku.
+        """
+        bill = self.data
+        if bill is None:
+            return None
+
+        # Suma netto/brutto pozycji „energia czynna" (baza metody procentowej).
+        energy_lines = [
+            l for l in bill.lines if l.key.startswith(ETS_ENERGY_KEY_PREFIX)
+        ]
+        energy_net = sum((l.net for l in energy_lines), Decimal("0"))
+        energy_gross = sum((l.gross for l in energy_lines), Decimal("0"))
+        energy_vat_rate = energy_lines[0].vat_rate if energy_lines else Decimal("0.23")
+
+        # Stawka energii czynnej z cen [zł/kWh] (niezależna od zużycia) — z profilu,
+        # by stawka ETS na wykresach działała też przy zerowym zużyciu.
+        profile = self.effective_profile()
+        energy_unit_rate_net = sum(
+            (
+                p.rate
+                for p in profile.positions
+                if p.enabled
+                and p.unit is Unit.PER_KWH
+                and p.key.startswith(ETS_ENERGY_KEY_PREFIX)
+            ),
+            Decimal("0"),
+        )
+
+        params = EtsParams(
+            percent_share=self.ets_percent / Decimal("100"),
+            emission_factor=self.ets_emission_factor,
+            eua_price_eur=self.ets_eua_price,
+            eur_pln=self.ets_eur_pln,
+        )
+        method = (
+            EtsMethod.PERCENT
+            if self.ets_method == ETS_METHOD_PERCENT
+            else EtsMethod.EMISSION
+        )
+        return estimate_ets(
+            method=method,
+            params=params,
+            energy_net=energy_net,
+            energy_gross=energy_gross,
+            energy_unit_rate_net=energy_unit_rate_net,
+            energy_vat_rate=energy_vat_rate,
+            consumption_kwh=bill.consumption_kwh,
+            bill_gross=bill.gross,
+        )
 
     async def capture_zero(self, zone: Zone) -> bool:
         """Zapisuje bieżący odczyt sensora strefy jako punkt zero.

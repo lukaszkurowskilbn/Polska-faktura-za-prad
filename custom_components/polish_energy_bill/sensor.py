@@ -40,6 +40,10 @@ async def async_setup_entry(
         UnitRateSensor(coordinator, entry),
         EnergyCostSensor(coordinator, entry),
         ConsumptionSensor(coordinator, entry),
+        EtsCostSensor(coordinator, entry),
+        EtsShareSensor(coordinator, entry),
+        EtsRateSensor(coordinator, entry),
+        EtsCo2Sensor(coordinator, entry),
     ]
     entities += [
         GroupSensor(coordinator, entry, group) for group in Group
@@ -232,3 +236,102 @@ class ConsumptionSensor(_BillEntity):
         if self.bill is None:
             return None
         return float(self.bill.consumption_kwh)
+
+
+# --------------------------------------------------------------------------
+#  ETS — koszty uprawnień do emisji CO₂ (dobudowana nakładka na rachunek)
+# --------------------------------------------------------------------------
+
+
+class _EtsEntity(_BillEntity):
+    """Baza encji ETS — bierze szacunek z coordinatora (nakładka na Bill)."""
+
+    @property
+    def estimate(self):
+        if self.bill is None:
+            return None
+        return self.coordinator.ets_estimate()
+
+
+class EtsCostSensor(_EtsEntity):
+    """Koszt ETS w okresie [PLN brutto] wg wybranej metody.
+
+    W atrybutach: pełne rozbicie (obie metody, udziały, emisja CO₂).
+    """
+
+    _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_state_class = SensorStateClass.TOTAL
+    _attr_native_unit_of_measurement = "PLN"
+    _attr_suggested_display_precision = 2
+
+    def __init__(self, coordinator, entry) -> None:
+        super().__init__(coordinator, entry)
+        self._attr_name = "ETS — koszt w rachunku (brutto)"
+        self._attr_unique_id = f"{entry.entry_id}_ets_cost"
+
+    @property
+    def native_value(self):
+        est = self.estimate
+        return float(est.gross) if est else None
+
+    @property
+    def extra_state_attributes(self):
+        est = self.estimate
+        return est.as_dict() if est else None
+
+
+class EtsShareSensor(_EtsEntity):
+    """Udział kosztów ETS w całym rachunku brutto [%]."""
+
+    _attr_native_unit_of_measurement = "%"
+    _attr_suggested_display_precision = 1
+    _attr_icon = "mdi:molecule-co2"
+
+    def __init__(self, coordinator, entry) -> None:
+        super().__init__(coordinator, entry)
+        self._attr_name = "ETS — udział w rachunku"
+        self._attr_unique_id = f"{entry.entry_id}_ets_share"
+
+    @property
+    def native_value(self):
+        est = self.estimate
+        return float(est.share_of_bill * 100) if est else None
+
+
+class EtsRateSensor(_EtsEntity):
+    """Stawka ETS brutto [zł/kWh] — mnożnik na wykresach kosztu w czasie.
+
+    Liczona z cen, niezależnie od zużycia (działa też przy zerze).
+    """
+
+    _attr_native_unit_of_measurement = "zł/kWh"
+    _attr_suggested_display_precision = 4
+
+    def __init__(self, coordinator, entry) -> None:
+        super().__init__(coordinator, entry)
+        self._attr_name = "ETS — stawka (brutto)"
+        self._attr_unique_id = f"{entry.entry_id}_ets_rate"
+
+    @property
+    def native_value(self):
+        est = self.estimate
+        return float(est.rate_gross) if est else None
+
+
+class EtsCo2Sensor(_EtsEntity):
+    """Masa CO₂ stojąca za zużyciem w okresie [kg] (pogląd)."""
+
+    _attr_native_unit_of_measurement = "kg"
+    _attr_state_class = SensorStateClass.TOTAL
+    _attr_suggested_display_precision = 1
+    _attr_icon = "mdi:cloud-outline"
+
+    def __init__(self, coordinator, entry) -> None:
+        super().__init__(coordinator, entry)
+        self._attr_name = "ETS — emisja CO₂"
+        self._attr_unique_id = f"{entry.entry_id}_ets_co2"
+
+    @property
+    def native_value(self):
+        est = self.estimate
+        return float(est.co2_kg) if est else None

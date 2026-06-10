@@ -1,6 +1,7 @@
 """Rdzeń kalkulatora rachunku — niezależny od Home Assistant."""
 
 from .calculator import Bill, LineItem, calculate, round_pln
+from .ets import EtsEstimate, EtsMethod, EtsParams, estimate as estimate_ets
 from .models import (
     BillingPeriod,
     Consumption,
@@ -17,6 +18,10 @@ __all__ = [
     "LineItem",
     "calculate",
     "round_pln",
+    "EtsEstimate",
+    "EtsMethod",
+    "EtsParams",
+    "estimate_ets",
     "BillingPeriod",
     "Consumption",
     "Group",

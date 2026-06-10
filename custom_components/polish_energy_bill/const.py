@@ -39,3 +39,19 @@ DEFAULT_BILLING_MONTHS: Final = 1.0
 
 # klucz przechowywania manualnego zużycia per strefa (number encje)
 CONF_MANUAL_CONSUMPTION: Final = "manual_consumption"  # {zone: float}
+
+# --- ETS: koszty uprawnień do emisji CO₂ (dobudowana nakładka) -----------
+# Dwie metody szacowania; wszystkie parametry edytowalne w UI, bo się zmieniają.
+ETS_METHOD_PERCENT: Final = "procent"   # udział % w cenie energii czynnej (komunikat PGE)
+ETS_METHOD_EMISSION: Final = "emisja"   # fizyczna: emisja CO₂ × cena EUA × kurs
+ETS_METHODS: Final = [ETS_METHOD_PERCENT, ETS_METHOD_EMISSION]
+
+# Wartości STARTOWE edytowalnych pól (nie są zaszyte na stałe — podmieniasz w UI):
+DEFAULT_ETS_PERCENT: Final = 55.0          # % udziału w cenie energii (PGE IV kw. 2026)
+DEFAULT_ETS_EMISSION_FACTOR: Final = 0.5426  # t CO₂/MWh (PGE „struktura paliw" 2025)
+DEFAULT_ETS_EUA_PRICE: Final = 80.0        # EUR/t CO₂ — RYNKOWE, sprawdź i podmień
+DEFAULT_ETS_EUR_PLN: Final = 4.30          # PLN/EUR — kurs, podmień
+
+# Prefiks klucza pozycji „energia czynna" — baza metody procentowej.
+# Łapie energia_czynna, energia_czynna_dzien, energia_czynna_noc itd.
+ETS_ENERGY_KEY_PREFIX: Final = "energia_czynna"

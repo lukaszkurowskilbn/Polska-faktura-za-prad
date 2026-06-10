@@ -16,6 +16,7 @@ jest osobną, edytowalną encją** — podmieniasz w UI, rachunek przelicza się
 - Dwa tryby zużycia: **z sensora HA** (np. licznik / `utility_meter`) albo **ręczne** wpisywanie kWh.
 - **Punkt zero**: pierwszy odczyt licznika ustawiasz jako „zero" (przyciskiem lub ręcznie), a koszty liczą się od niego.
 - **Osobny panel** w pasku bocznym z dużymi, czytelnymi kwotami i **wykresami kosztów dzień/tydzień/miesiąc** (ApexCharts) — prościej niż na fakturze.
+- **Szacunek ETS (CO₂)** — ile z rachunku to koszty uprawnień do emisji. Osobne encje i wykres, **nie zmieniają** reszty rachunku (czysta nakładka).
 
 ## Dokładność
 
@@ -102,6 +103,31 @@ zużycia (encja select „Tryb zużycia okresu"):
 Z dat liczona jest też liczba dni i miesięcy okresu (do opłat stałych) — okres
 kalendarzowy, więc np. 31.01→31.03 to dokładnie 2 miesiące (opłaty stałe ×2),
 zgodnie z fakturą. Wybrany zakres pojawia się w nagłówku tabeli „jak na fakturze".
+
+## ETS — udział kosztów CO₂ w rachunku
+
+Koszt uprawnień do emisji CO₂ (ETS) **nie jest osobną pozycją** polskiej faktury —
+jest zaszyty w cenie energii czynnej. Integracja szacuje go jako **nakładkę** na
+gotowy rachunek (nic w nim nie zmienia) i daje wybór jednej z dwóch metod (encja
+select **„ETS: metoda liczenia"**):
+
+- **Udział % w cenie energii** — PGE publikuje go kwartalnie w komunikacie
+  (§37 ust. 2 rozporządzenia taryfowego): **55 % w IV kw. 2026** (56 % w 2025).
+  Liczone wprost: `ETS = udział × wartość energii czynnej`. Najbliżej faktury.
+- **Emisja CO₂ × cena EUA × kurs** — fizyczne: `zużycie[MWh] × wskaźnik[t/MWh] ×
+  cena_EUA[EUR/t] × EUR/PLN`. Wskaźnik **0,5426 t/MWh** ze „struktury paliw" PGE 2025.
+
+Wszystkie parametry **zmieniają się w czasie**, więc są **edytowalnymi polami**
+(encje `number`), pamiętanymi między restartami — nie ma stałych w kodzie:
+udział %, wskaźnik emisji, cena uprawnienia EUA `[EUR/t]`, kurs EUR/PLN.
+
+Encje wynikowe: **koszt ETS (brutto)**, **udział w rachunku [%]**, **emisja CO₂ [kg]**
+oraz **stawka ETS [zł/kWh]** (mnożnik na wykresie kosztu w czasie). W atrybutach
+sensora kosztu jest komplet: obie metody, udziały i emisja. Na panelu dochodzi
+kafelki, donut **ETS vs reszta** i wykres **kosztu ETS dziennie**.
+
+> Ceny EUA i kurs są rynkowe — wpisz aktualne wartości. Domyślne (80 EUR/t,
+> 4,30 PLN/EUR) to tylko punkt startowy.
 
 ## Osobny panel (dashboard)
 

@@ -251,6 +251,111 @@ views:
                   const r =
                   Number(hass.states['sensor.liczniki_rachunek_za_prad_stawka_zmienna_brutto']?.state);
                   return x * (isFinite(r) && r > 0 ? r : 1.10);
+      # =====================================================================
+      #  ETS — ile w rachunku to koszty uprawnień do emisji CO₂ (DOBUDOWANE).
+      #
+      #  UWAGA o prefiksach (jak w nagłówku pliku): w tej instancji SENSORY
+      #  kosztu/udziału mają prefiks sensor.rachunek_za_prad_, a sensor STAWKI
+      #  oraz encje number/select prefiks ...liczniki_rachunek_za_prad_.
+      #  Jeśli u Ciebie jest inaczej — sprawdź realne nazwy w
+      #  Narzędzia deweloperskie → Stany i podmień.
+      # =====================================================================
+      - type: grid
+        cards:
+          - type: heading
+            heading: Ile w rachunku to ETS (CO₂)
+            heading_style: title
+          - type: entities
+            title: Metoda i parametry ETS
+            entities:
+              - entity: select.liczniki_rachunek_za_prad_ets_metoda_liczenia
+                name: Metoda liczenia ETS
+              - entity: number.liczniki_rachunek_za_prad_ets_udzial_w_cenie_energii
+                name: Udział ETS w cenie energii (komunikat PGE)
+              - entity: number.liczniki_rachunek_za_prad_ets_cena_uprawnienia_eua
+                name: Cena uprawnienia EUA (rynek)
+              - entity: number.liczniki_rachunek_za_prad_ets_kurs_eur_pln
+                name: Kurs EUR/PLN
+              - entity: number.liczniki_rachunek_za_prad_ets_wskaznik_emisji_co
+                name: Wskaźnik emisji CO₂
+          - type: markdown
+            content: >
+              {% set c =
+              'sensor.rachunek_za_prad_ets_koszt_w_rachunku_brutto' %}
+
+              {% set a = state_attr(c, 'method') %}
+
+              Metoda: **{{ 'udział % w cenie energii' if a == 'procent' else
+              'emisja CO₂ × cena EUA × kurs' }}**.
+              Koszt ETS wg metody procentowej: **{{
+              '%.2f'|format(state_attr(c,'percent_gross') or
+              0)|replace('.',',') }} zł**, wg metody emisyjnej: **{{
+              '%.2f'|format(state_attr(c,'emission_gross') or
+              0)|replace('.',',') }} zł** (brutto). ETS jest zaszyty w cenie
+              energii czynnej — to szacunek, nie osobna pozycja faktury.
+          - type: grid
+            columns: 3
+            square: false
+            cards:
+              - type: tile
+                entity: sensor.rachunek_za_prad_ets_koszt_w_rachunku_brutto
+                name: Koszt ETS (brutto)
+                icon: mdi:molecule-co2
+                color: deep-orange
+              - type: tile
+                entity: sensor.rachunek_za_prad_ets_udzial_w_rachunku
+                name: Udział w rachunku
+                icon: mdi:chart-donut
+                color: deep-orange
+              - type: tile
+                entity: sensor.rachunek_za_prad_ets_emisja_co
+                name: Emisja CO₂
+                icon: mdi:cloud-outline
+                color: grey
+          - type: custom:apexcharts-card
+            chart_type: donut
+            header:
+              show: true
+              title: ETS vs reszta rachunku (brutto)
+            apex_config:
+              legend:
+                position: bottom
+              dataLabels:
+                enabled: true
+            series:
+              - entity: sensor.rachunek_za_prad_ets_koszt_w_rachunku_brutto
+                name: ETS (CO₂)
+              - entity: sensor.rachunek_za_prad_do_zaplaty_brutto
+                name: Reszta rachunku
+                transform: >-
+                  return x -
+                  Number(hass.states['sensor.rachunek_za_prad_ets_koszt_w_rachunku_brutto']?.state
+                  || 0);
+          - type: custom:apexcharts-card
+            graph_span: 30d
+            header:
+              show: true
+              title: Koszt ETS — dziennie (30 dni)
+              show_states: false
+            apex_config:
+              chart:
+                height: 240
+            series:
+              - entity: sensor.pge_total_energy_consumption
+                name: ETS dzienny
+                type: column
+                unit: zł
+                statistics:
+                  type: change
+                  period: day
+                group_by:
+                  func: max
+                  duration: 1d
+                transform: >-
+                  const r =
+                  Number(hass.states['sensor.liczniki_rachunek_za_prad_ets_stawka_brutto']?.state);
+                  return x * (isFinite(r) && r > 0 ? r : 0);
+        column_span: 2
       - type: grid
         cards:
           - type: heading
