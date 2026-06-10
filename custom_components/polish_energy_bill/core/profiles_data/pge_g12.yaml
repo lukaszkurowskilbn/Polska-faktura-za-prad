@@ -23,7 +23,7 @@ positions:
     group: sale
     unit: per_kwh
     zone: day
-    rate: "0.55000"        # PRZYKŁAD — podmień
+    rate: "0.57060"        # PRZYKŁAD — podmień
     vat: "0.23"
 
   - key: energia_czynna_noc
@@ -31,7 +31,7 @@ positions:
     group: sale
     unit: per_kwh
     zone: night
-    rate: "0.40000"        # PRZYKŁAD — podmień
+    rate: "0.37680"        # PRZYKŁAD — podmień
     vat: "0.23"
 
   - key: oplata_kogeneracyjna
@@ -56,7 +56,7 @@ positions:
     group: distribution
     unit: per_kwh
     zone: day
-    rate: "0.42000"        # PRZYKŁAD — podmień
+    rate: "0.40140"        # PRZYKŁAD — podmień
     vat: "0.23"
 
   - key: oplata_dystr_sieciowa_noc
@@ -64,7 +64,7 @@ positions:
     group: distribution
     unit: per_kwh
     zone: night
-    rate: "0.12000"        # PRZYKŁAD — podmień
+    rate: "0.07650"        # PRZYKŁAD — podmień
     vat: "0.23"
 
   - key: oplata_dystr_jakosciowa
@@ -79,14 +79,14 @@ positions:
     name: opłata stała za dystrybucję
     group: distribution
     unit: per_month
-    rate: "9.98000"
+    rate: "14.40000" # 3 fazy
     vat: "0.23"
 
   - key: abonament_dystr
     name: abonament dystrybucyjny
     group: distribution
     unit: per_month
-    rate: "2.25000"
+    rate: "0.75000"
     vat: "0.23"
 
   - key: oplata_mocowa_stala
