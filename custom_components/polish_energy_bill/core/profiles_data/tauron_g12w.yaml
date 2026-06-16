@@ -1,0 +1,101 @@
+# Profil: TAURON Sprzedaż — taryfa G12w (rok 2026).
+# Realne stawki BRUTTO (z VAT 23%) zatwierdzone przez URE i Tauron Dystrybucja.
+# Uwzględnia układ 3-fazowy oraz okres rozliczeniowy 1-miesięczny.
+key: tauron_g12w
+name: TAURON Sprzedaż — G12w (Stawki Realne 2026)
+seller: TAURON Sprzedaż GZE Sp. z o.o.
+tariff: G12w
+currency: PLN
+zones:
+  - day
+  - night
+
+positions:
+  # --- SPRZEDAŻ (obrót) ---
+  - key: energia_czynna_dzien
+    name: za energię czynną (dzień - szczyt)
+    group: sale
+    unit: per_kwh
+    zone: day
+    rate: "1.23030"        # Realna cena energii 2026 brutto ze strefy droższejs
+    vat: "0.00"            # Stawka wyżej zawiera już VAT, podajemy 0.00 żeby nie mnożyć podwójnie
+
+  - key: energia_czynna_noc
+    name: za energię czynną (noc/weekend - pozaszczyt)
+    group: sale
+    unit: per_kwh
+    zone: night
+    rate: "0.63050"        # Realna cena energii 2026 brutto ze strefy tańszej
+    vat: "0.00"
+
+  - key: oplata_kogeneracyjna
+    name: opłata kogeneracyjna
+    group: sale
+    unit: per_mwh
+    zone: all
+    rate: "3.69000"        # 3,00 zł netto -> 3,69 zł brutto za MWh
+    vat: "0.00"
+
+  - key: oplata_oze
+    name: opłata OZE
+    group: sale
+    unit: per_mwh
+    zone: all
+    rate: "8.97900"        # 7,30 zł netto -> 8,979 zł brutto za MWh
+    vat: "0.00"
+
+  # --- DYSTRYBUCJA (OSD Tauron) ---
+  - key: oplata_dystr_sieciowa_dzien
+    name: opłata dystrybucyjna sieciowa — dzień
+    group: distribution
+    unit: per_kwh
+    zone: day
+    rate: "0.40570"        # Oficjalna stawka zmienna dzienna brutto dla G12w
+    vat: "0.00"
+
+  - key: oplata_dystr_sieciowa_noc
+    name: opłata dystrybucyjna sieciowa — noc/weekend
+    group: distribution
+    unit: per_kwh
+    zone: night
+    rate: "0.06300"        # Oficjalna stawka zmienna nocna brutto dla G12w
+    vat: "0.00"
+
+  - key: oplata_dystr_jakosciowa
+    name: opłata dystrybucyjna jakościowa (zmienna)
+    group: distribution
+    unit: per_kwh
+    zone: all
+    rate: "0.03310"        # Urzędowa stawka systemowa na rok 2026 brutto
+    vat: "0.00"
+
+  - key: oplata_stala_dystr
+    name: opłata stała za dystrybucję (3-fazowa)
+    group: distribution
+    unit: per_month
+    rate: "13.36000"       # Oficjalna stawka dla przyłącza 3f brutto
+    vat: "0.00"
+
+  - key: abonament_dystr
+    name: abonament dystrybucyjny (cykl 1-miesięczny)
+    group: distribution
+    unit: per_month
+    rate: "5.61000"        # Stawka dla najczęstszego, miesięcznego okresu rozliczeniowego brutto
+    vat: "0.00"
+
+  - key: oplata_mocowa_stala
+    name: opłata mocowa (zużycie >2800 kWh/rok)
+    group: distribution
+    unit: per_month
+    rate: "29.58000"       # Nowy próg opłaty mocowej na rok 2026 brutto
+    vat: "0.00"
+
+  # --- PODATKI / OPŁATY ---
+  - key: akcyza
+    name: akcyza
+    group: tax
+    unit: per_mwh
+    zone: all
+    rate: "6.15000"        # 5,00 zł netto -> 6,15 zł brutto (zostawiona jako wyłączona, ujęta w cenie energii)
+    vat: "0.00"
+    enabled: false

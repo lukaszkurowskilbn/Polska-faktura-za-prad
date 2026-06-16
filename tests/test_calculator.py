@@ -134,7 +134,7 @@ def test_vat_computed_per_rate_on_summed_net():
 
 def test_builtin_profiles_load():
     profiles = load_builtin_profiles()
-    assert set(profiles) == {"pge_g11", "pge_g12", "pge_g12w"}
+    assert set(profiles) == {"pge_g11", "pge_g12", "pge_g12w", "tauron_g12w"}
     g11 = profiles["pge_g11"]
     assert g11.tariff == "G11"
     assert g11.position("energia_czynna").rate == D("0.50320")
