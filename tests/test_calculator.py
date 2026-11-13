@@ -187,3 +187,52 @@ def test_invoice_individual_positions_exact():
     assert bill.line("oplata_stala_dystr").net == D("9.98")
     assert bill.line("abonament_dystr").net == D("2.25")
     assert bill.line("oplata_mocowa_stala").net == D("24.05")
+
+
+def test_real_invoice_408000059008_exact():
+    """Faktura PGE 408000059008: G11, 634 kWh, okres 21.05–20.07.2026.
+
+    Pojedynczy odczyt licznika (4709,5→5343,0 = 634 kWh), więc rachunek trafia
+    CO DO GROSZA bez tolerancji. Opłaty stałe fakturowane za 2 pełne miesiące
+    kalendarzowe (01.06–31.07) — podajemy months=2 (tak jak nalicza PGE).
+
+    Źródło: załącznik do faktury, str. 4. Suma: 639,10 / 146,99 / 786,09.
+    """
+    g11 = load_builtin_profiles()["pge_g11"]
+    bill = calculate(
+        g11, Consumption({Zone.ALL: D("634")}), BillingPeriod(days=61, months=D("2"))
+    )
+    assert bill.line("energia_czynna").net == D("319.03")          # 634 × 0,50320
+    assert bill.line("oplata_dystr_sieciowa").net == D("219.93")   # 634 × 0,34690
+    assert bill.line("oplata_dystr_jakosciowa").net == D("21.05")  # 634 × 0,03320
+    assert bill.line("oplata_kogeneracyjna").net == D("1.90")      # 0,634 MWh × 3,00
+    assert bill.line("oplata_oze").net == D("4.63")                # 0,634 MWh × 7,30
+    assert bill.line("oplata_mocowa_stala").net == D("48.10")      # 2 × 24,05
+    assert bill.line("oplata_stala_dystr").net == D("19.96")       # 2 × 9,98
+    assert bill.line("abonament_dystr").net == D("4.50")           # 2 × 2,25
+    assert bill.net == D("639.10")
+    assert bill.vat == D("146.99")
+    assert bill.gross == D("786.09")
+    # Brutto spójne co do grosza.
+    assert bill.gross == bill.net + bill.vat
+
+
+def test_408_auto_dates_underbills_fixed_fees():
+    """Dokumentuje znane uproszczenie: w trybie dat auto liczba miesięcy do
+    opłat stałych wynika z różnicy dat, nie z pełnych miesięcy kalendarzowych.
+
+    Dla 21.05→20.07 from_dates daje ~1,97 mc, więc opłaty stałe (mocowa,
+    sieciowa stała, abonament) są nieco niższe niż na fakturze (2 pełne mc).
+    Obejście: ustaw liczbę miesięcy ręcznie (opcja billing_months = 2).
+    """
+    from datetime import date
+
+    g11 = load_builtin_profiles()["pge_g11"]
+    bp = BillingPeriod.from_dates(date(2026, 5, 21), date(2026, 7, 20))
+    # Różnica dat daje mniej niż 2 pełne miesiące.
+    assert bp.months < D("2")
+    bill = calculate(g11, Consumption({Zone.ALL: D("634")}), bp)
+    # Części zmienne (od kWh) bez zmian — trafiają co do grosza.
+    assert bill.line("energia_czynna").net == D("319.03")
+    # Opłaty stałe policzone z ułamka miesięcy → niższe niż 2 pełne mc.
+    assert bill.line("oplata_mocowa_stala").net < D("48.10")

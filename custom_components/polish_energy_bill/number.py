@@ -12,17 +12,21 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from functools import partial
+
 from .const import (
     DEFAULT_ETS_EMISSION_FACTOR,
     DEFAULT_ETS_EUA_PRICE,
     DEFAULT_ETS_EUR_PLN,
     DEFAULT_ETS_PERCENT,
+    DEFAULT_FIXED_MONTHS_OVERRIDE,
+    DEFAULT_POWER_FEE_ANNUAL_KWH,
     DOMAIN,
     MODE_MANUAL,
     MODE_SENSOR,
 )
 from .coordinator import BillCoordinator
-from .core import Zone
+from .core import DEFAULT_SEGMENT_RATES_2026, SEGMENT_THRESHOLDS, Zone
 
 ZONE_LABEL = {
     Zone.ALL: "całodobowa",
@@ -67,6 +71,41 @@ async def async_setup_entry(
             min_value=0.0, max_value=100.0, step=0.0001, unit="PLN/EUR",
         ),
     ]
+
+    # Opłaty stałe — wymuszona liczba miesięcy (0 = auto).
+    entities.append(
+        EtsParamNumber(
+            coordinator, entry, "fixed_months", "Opłaty stałe: liczba miesięcy",
+            DEFAULT_FIXED_MONTHS_OVERRIDE, coordinator.set_fixed_months_override,
+            min_value=0.0, max_value=24.0, step=1.0, unit="mc",
+        )
+    )
+
+    # Opłata mocowa — zużycie roczne (do auto-wyboru segmentu) + 4 stawki segmentów.
+    seg_hi = SEGMENT_THRESHOLDS  # (500, 1200, 2800)
+    seg_labels = [
+        f"Opłata mocowa: stawka seg.1 (≤{seg_hi[0]} kWh/rok)",
+        f"Opłata mocowa: stawka seg.2 ({seg_hi[0]}–{seg_hi[1]} kWh/rok)",
+        f"Opłata mocowa: stawka seg.3 ({seg_hi[1]}–{seg_hi[2]} kWh/rok)",
+        f"Opłata mocowa: stawka seg.4 (>{seg_hi[2]} kWh/rok)",
+    ]
+    entities.append(
+        EtsParamNumber(
+            coordinator, entry, "power_fee_annual_kwh",
+            "Opłata mocowa: zużycie roczne", DEFAULT_POWER_FEE_ANNUAL_KWH,
+            coordinator.set_power_fee_annual_kwh,
+            min_value=0.0, max_value=100000.0, step=1.0, unit="kWh",
+        )
+    )
+    for seg in range(1, 5):
+        entities.append(
+            EtsParamNumber(
+                coordinator, entry, f"power_fee_rate_{seg}", seg_labels[seg - 1],
+                float(DEFAULT_SEGMENT_RATES_2026[seg - 1]),
+                partial(coordinator.set_power_fee_rate, seg),
+                min_value=0.0, max_value=1000.0, step=0.01, unit="zł",
+            )
+        )
 
     if coordinator.mode == MODE_MANUAL:
         entities += [
