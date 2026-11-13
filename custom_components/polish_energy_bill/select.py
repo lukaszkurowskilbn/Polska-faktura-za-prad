@@ -20,6 +20,9 @@ from .const import (
     PERIOD_MODE_SINCE,
     PERIOD_MODE_ZERO,
     PERIOD_MODES,
+    POWER_FEE_MODE_AUTO,
+    POWER_FEE_MODE_MANUAL,
+    POWER_FEE_MODES,
 )
 from .coordinator import BillCoordinator
 
@@ -36,13 +39,21 @@ ETS_LABELS = {
     ETS_METHOD_EMISSION: "Emisja CO₂ × cena EUA × kurs",
 }
 
+POWER_FEE_LABELS = {
+    POWER_FEE_MODE_MANUAL: "Ręcznie (stawka jak dotąd)",
+    POWER_FEE_MODE_AUTO: "Auto wg zużycia rocznego (segment)",
+}
+
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     coordinator: BillCoordinator = hass.data[DOMAIN][entry.entry_id]
-    # Wybór metody ETS ma sens w obu trybach zużycia.
-    entities: list[SelectEntity] = [EtsMethodSelect(coordinator, entry)]
+    # Wybór metody ETS i tryb opłaty mocowej — sensowne w obu trybach zużycia.
+    entities: list[SelectEntity] = [
+        EtsMethodSelect(coordinator, entry),
+        PowerFeeModeSelect(coordinator, entry),
+    ]
     # Tryby okresu mają sens tylko przy zużyciu z sensora.
     if coordinator.mode == MODE_SENSOR:
         entities.append(PeriodModeSelect(coordinator, entry))
@@ -125,5 +136,45 @@ class EtsMethodSelect(RestoreEntity, SelectEntity):
     async def async_select_option(self, option: str) -> None:
         self._attr_current_option = option
         self.coordinator.set_ets_method(self._rev[option])
+        self.async_write_ha_state()
+        await self.coordinator.async_request_refresh()
+
+
+class PowerFeeModeSelect(RestoreEntity, SelectEntity):
+    """Wybór trybu opłaty mocowej: ręczna stawka vs auto wg zużycia rocznego."""
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_options = [POWER_FEE_LABELS[m] for m in POWER_FEE_MODES]
+
+    def __init__(self, coordinator: BillCoordinator, entry: ConfigEntry) -> None:
+        self.coordinator = coordinator
+        self._entry = entry
+        self._attr_name = "Opłata mocowa: tryb"
+        self._attr_unique_id = f"{entry.entry_id}_power_fee_mode"
+        self._attr_current_option = POWER_FEE_LABELS[POWER_FEE_MODE_MANUAL]
+        self._rev = {v: k for k, v in POWER_FEE_LABELS.items()}
+
+    @property
+    def device_info(self):
+        return {
+            "identifiers": {(DOMAIN, self._entry.entry_id)},
+            "name": self._entry.title,
+            "manufacturer": self.coordinator.base_profile.seller,
+            "model": self.coordinator.base_profile.name,
+        }
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last = await self.async_get_last_state()
+        if last is not None and last.state in self._rev:
+            self._attr_current_option = last.state
+        self.coordinator.set_power_fee_mode(self._rev[self._attr_current_option])
+        await self.coordinator.async_request_refresh()
+
+    async def async_select_option(self, option: str) -> None:
+        self._attr_current_option = option
+        self.coordinator.set_power_fee_mode(self._rev[option])
         self.async_write_ha_state()
         await self.coordinator.async_request_refresh()

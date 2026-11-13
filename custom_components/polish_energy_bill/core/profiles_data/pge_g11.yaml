@@ -67,6 +67,10 @@ positions:
     rate: "2.25000"
     vat: "0.23"
 
+  # Opłata mocowa dla gospodarstw domowych ma 4 segmenty wg rocznego zużycia
+  # (seg.1 ≤500, seg.2 500–1200, seg.3 1200–2800, seg.4 >2800 kWh/rok).
+  # Na fakturze bywa oznaczona np. "seg.4". Tu stawka seg.4; podmień swoją,
+  # jeśli Twoje roczne zużycie trafia w inny segment.
   - key: oplata_mocowa_stala
     name: opłata mocowa (stała)
     group: distribution

@@ -55,3 +55,16 @@ DEFAULT_ETS_EUR_PLN: Final = 4.30          # PLN/EUR — kurs, podmień
 # Prefiks klucza pozycji „energia czynna" — baza metody procentowej.
 # Łapie energia_czynna, energia_czynna_dzien, energia_czynna_noc itd.
 ETS_ENERGY_KEY_PREFIX: Final = "energia_czynna"
+
+# --- Opłaty stałe: liczba miesięcy ---------------------------------------
+# Live override: 0 = auto (zamknięte zakresy dat → pełne miesiące kalendarzowe,
+# tryb bieżący/narastający → ułamek). > 0 = wymuszona liczba miesięcy.
+DEFAULT_FIXED_MONTHS_OVERRIDE: Final = 0.0
+
+# --- Opłata mocowa: auto-wybór segmentu wg zużycia rocznego --------------
+POWER_FEE_MODE_MANUAL: Final = "reczny"   # stawka jak dotąd (encja „Stawka: …")
+POWER_FEE_MODE_AUTO: Final = "auto"       # auto wg zużycia rocznego
+POWER_FEE_MODES: Final = [POWER_FEE_MODE_MANUAL, POWER_FEE_MODE_AUTO]
+# Klucz pozycji opłaty mocowej (ten sam w G11/G12/G12w):
+POWER_FEE_POSITION_KEY: Final = "oplata_mocowa_stala"
+DEFAULT_POWER_FEE_ANNUAL_KWH: Final = 0.0  # 0 = nieustawione (użyj stawki ręcznej)

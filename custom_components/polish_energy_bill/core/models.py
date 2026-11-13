@@ -7,7 +7,7 @@ bo pieniądze i ułamki groszy nie wybaczają floatów.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from enum import Enum
 from typing import Any
 
@@ -163,12 +163,18 @@ class BillingPeriod:
         object.__setattr__(self, "months", _dec(self.months))
 
     @classmethod
-    def from_dates(cls, start, end) -> "BillingPeriod":
+    def from_dates(cls, start, end, whole_months: bool = False) -> "BillingPeriod":
         """Liczy okres z zakresu dat (date/datetime).
 
         - days  = różnica dni (min. 1),
         - months = miesiące kalendarzowe + ułamek z dni, tak by typowy okres
           rozliczeniowy trafiał w naliczenia faktury (np. 31.01→31.03 = 2,0).
+
+        whole_months=True zaokrągla miesiące do pełnej liczby (min. 1). Polskie
+        opłaty stałe (mocowa, sieciowa stała, abonament) są naliczane za PEŁNE
+        miesiące kalendarzowe, więc dla ZAMKNIĘTEGO okresu rozliczeniowego
+        (np. 21.05→20.07 → 2 mc) to odwzorowuje fakturę co do grosza. Dla
+        okresu bieżącego/narastającego zostaw False (ułamek = naliczanie wprost).
         """
         days = (end - start).days
         if days < 1:
@@ -179,6 +185,10 @@ class BillingPeriod:
         )
         if months <= 0:
             months = Decimal(days) / Decimal("30.4375")
+        if whole_months:
+            months = months.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+            if months < 1:
+                months = Decimal("1")
         return cls(days=days, months=months)
 
 

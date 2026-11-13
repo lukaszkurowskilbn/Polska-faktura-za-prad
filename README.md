@@ -29,6 +29,18 @@ Bierze się ona stąd, że PGE zaokrągla **per odczyt** (dwa odczyty w okresie)
 energię z innego zaokrąglenia zużycia niż dystrybucję. Nasz kalkulator jest
 wewnętrznie spójny; pojedyncze pozycje miesięczne trafia **co do grosza**.
 
+Na fakturze z **pojedynczym odczytem** (nr 408000059008, G11, 634 kWh, okres
+21.05–20.07.2026) kalkulator trafia **co do grosza na całości**: 639,10 / 146,99 /
+**786,09 zł** — dokładnie jak faktura (test `test_real_invoice_408000059008_exact`).
+
+Opłaty stałe PGE nalicza za **pełne miesiące kalendarzowe** (na tej fakturze
+01.06–31.07 = 2 mc), a okres odczytu energii bywa inny (21.05–20.07). Dodatek to
+odwzorowuje: dla **zamkniętego zakresu dat** zaokrągla miesiące opłat stałych do
+pełnych, więc rachunek trafia co do grosza z samych dat. W trybie bieżącym
+(*od odczytu do teraz*) opłaty stałe liczą się proporcjonalnie (narastają z
+czasem). Możesz też wymusić liczbę miesięcy ręcznie (encja *Opłaty stałe: liczba
+miesięcy*, 0 = auto).
+
 ## Instalacja (HACS)
 
 1. HACS → Integrations → menu (⋮) → **Custom repositories**.
@@ -128,6 +140,36 @@ kafelki, donut **ETS vs reszta** i wykres **kosztu ETS dziennie**.
 
 > Ceny EUA i kurs są rynkowe — wpisz aktualne wartości. Domyślne (80 EUR/t,
 > 4,30 PLN/EUR) to tylko punkt startowy.
+
+## Opłaty stałe i opłata mocowa (segmenty)
+
+**Opłaty stałe — pełne miesiące.** Polskie opłaty stałe (mocowa, składnik stały
+sieciowej, abonament) są naliczane za pełne miesiące kalendarzowe. Przy
+zamkniętym zakresie dat dodatek zaokrągla miesiące do pełnych (21.05→20.07 = 2),
+więc odwzorowuje fakturę co do grosza. Tryb bieżący liczy proporcjonalnie.
+Encja *Opłaty stałe: liczba miesięcy* (0 = auto) pozwala wymusić wartość.
+
+**Opłata mocowa — auto-segment.** Dla gospodarstw domowych opłata mocowa jest
+ryczałtowa i zależy od **rocznego zużycia** w punkcie poboru (progi
+500 / 1200 / 2800 kWh → 4 segmenty). Encja select *Opłata mocowa: tryb*:
+
+- **Ręcznie** (domyślnie) — jedna stawka, jak dotąd (encja „Stawka: opłata mocowa").
+- **Auto wg zużycia rocznego** — podajesz roczne zużycie (faktura: „zużycie w
+  roku poprzednim"), a dodatek wybiera stawkę właściwego segmentu.
+
+Stawki segmentów to osobne, edytowalne pola (zmieniają się co roku). Domyślne
+wartości to **stawki URE na 2026** (Informacja Prezesa URE nr 58/2025 z 30.10.2025,
+netto zł/mc):
+
+| Segment | Roczne zużycie | Stawka 2026 |
+|--------:|:---------------|------------:|
+| seg.1 | ≤ 500 kWh | 4,29 |
+| seg.2 | 500–1200 kWh | 10,31 |
+| seg.3 | 1200–2800 kWh | 17,18 |
+| seg.4 | > 2800 kWh | 24,05 |
+
+Gdy URE ogłosi stawki na kolejny rok — podmień pola segmentów. (Dla porównania:
+faktura 408000059008 ma „Opłata mocowa seg.4" = 24,05, bo roczne zużycie > 2800 kWh.)
 
 ## Osobny panel (dashboard)
 

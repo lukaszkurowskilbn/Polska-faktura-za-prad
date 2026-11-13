@@ -431,4 +431,26 @@ views:
             content: >
               **Stawki** — zmień, gdy URE/sprzedawca podniesie ceny (encje
               „Stawka: …"). Wartości netto, rachunek przeliczy się od razu.
+          - type: entities
+            title: Opłaty stałe i opłata mocowa
+            entities:
+              - entity: number.liczniki_rachunek_za_prad_oplaty_stale_liczba_miesiecy
+                name: Opłaty stałe — liczba miesięcy (0 = auto)
+                secondary_info: >-
+                  0 = auto: zamknięty zakres dat liczy pełne miesiące
+                  kalendarzowe, tryb bieżący — proporcjonalnie. Ustaw ręcznie,
+                  by wymusić (np. 2 jak na fakturze).
+              - entity: select.liczniki_rachunek_za_prad_oplata_mocowa_tryb
+                name: Opłata mocowa — tryb
+              - entity: number.liczniki_rachunek_za_prad_oplata_mocowa_zuzycie_roczne
+                name: Opłata mocowa — zużycie roczne (do auto-segmentu)
+          - type: markdown
+            content: >
+              **Opłata mocowa** dla domów jest ryczałtowa wg **rocznego
+              zużycia** (progi 500 / 1200 / 2800 kWh). W trybie *Auto* podaj
+              zużycie roczne (z faktury: „zużycie w roku poprzednim"), a dodatek
+              sam wybierze stawkę segmentu. Stawki segmentów (encje „Opłata
+              mocowa: stawka seg.1–4", domyślnie URE 2026: 4,29 / 10,31 / 17,18 /
+              24,05) zmień, gdy URE ogłosi nowe. W trybie *Ręcznie* działa jak
+              dotąd — pojedyncza „Stawka: opłata mocowa".
         column_span: 2

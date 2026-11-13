@@ -24,6 +24,8 @@ from .const import (
     DEFAULT_ETS_EUA_PRICE,
     DEFAULT_ETS_EUR_PLN,
     DEFAULT_ETS_PERCENT,
+    DEFAULT_FIXED_MONTHS_OVERRIDE,
+    DEFAULT_POWER_FEE_ANNUAL_KWH,
     DOMAIN,
     ETS_ENERGY_KEY_PREFIX,
     ETS_METHOD_PERCENT,
@@ -32,6 +34,9 @@ from .const import (
     PERIOD_MODE_READINGS,
     PERIOD_MODE_SINCE,
     PERIOD_MODE_ZERO,
+    POWER_FEE_MODE_AUTO,
+    POWER_FEE_MODE_MANUAL,
+    POWER_FEE_POSITION_KEY,
 )
 from .core import (
     Bill,
@@ -40,11 +45,13 @@ from .core import (
     EtsEstimate,
     EtsMethod,
     EtsParams,
+    DEFAULT_SEGMENT_RATES_2026,
     TariffProfile,
     Unit,
     Zone,
     calculate,
     estimate_ets,
+    power_fee_rate_for,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -94,6 +101,16 @@ class BillCoordinator(DataUpdateCoordinator[Bill]):
         self.ets_emission_factor: Decimal = Decimal(str(DEFAULT_ETS_EMISSION_FACTOR))
         self.ets_eua_price: Decimal = Decimal(str(DEFAULT_ETS_EUA_PRICE))
         self.ets_eur_pln: Decimal = Decimal(str(DEFAULT_ETS_EUR_PLN))
+
+        # Opłaty stałe: wymuszona liczba miesięcy (0 = auto).
+        self.fixed_months_override: Decimal = Decimal(str(DEFAULT_FIXED_MONTHS_OVERRIDE))
+
+        # Opłata mocowa: auto-wybór segmentu wg zużycia rocznego.
+        self.power_fee_mode: str = POWER_FEE_MODE_MANUAL
+        self.power_fee_annual_kwh: Decimal = Decimal(str(DEFAULT_POWER_FEE_ANNUAL_KWH))
+        self.power_fee_rates: list[Decimal] = [
+            Decimal(r) for r in DEFAULT_SEGMENT_RATES_2026
+        ]
 
     # --- API dla encji number ---
 
@@ -158,6 +175,45 @@ class BillCoordinator(DataUpdateCoordinator[Bill]):
     @callback
     def set_ets_eur_pln(self, value: float) -> None:
         self.ets_eur_pln = Decimal(str(value))
+
+    # --- API: opłaty stałe (liczba miesięcy) i opłata mocowa (segment) ---
+
+    @callback
+    def set_fixed_months_override(self, value: float) -> None:
+        self.fixed_months_override = Decimal(str(value))
+
+    @callback
+    def set_power_fee_mode(self, mode: str) -> None:
+        self.power_fee_mode = mode
+
+    @callback
+    def set_power_fee_annual_kwh(self, value: float) -> None:
+        self.power_fee_annual_kwh = Decimal(str(value))
+
+    @callback
+    def set_power_fee_rate(self, segment: int, value: float) -> None:
+        """Ustawia stawkę segmentu opłaty mocowej (segment = 1..4)."""
+        self.power_fee_rates[segment - 1] = Decimal(str(value))
+
+    def _power_fee_override(self) -> dict[str, Decimal]:
+        """Nadpisanie stawki opłaty mocowej, gdy tryb = auto wg zużycia rocznego.
+
+        Zwraca {} w trybie ręcznym lub gdy nie podano zużycia rocznego — wtedy
+        działa zwykła edytowalna stawka (encja „Stawka: opłata mocowa").
+        """
+        if self.power_fee_mode != POWER_FEE_MODE_AUTO:
+            return {}
+        if self.power_fee_annual_kwh <= 0:
+            return {}
+        rate = power_fee_rate_for(self.power_fee_annual_kwh, tuple(self.power_fee_rates))
+        return {POWER_FEE_POSITION_KEY: rate}
+
+    def _rate_overrides(self) -> dict[str, Decimal]:
+        """Stawki z encji number + ewentualne nadpisanie opłaty mocowej (auto).
+
+        Auto-segment opłaty mocowej ma priorytet nad ręczną stawką tej pozycji.
+        """
+        return {**self.rate_overrides, **self._power_fee_override()}
 
     def ets_estimate(self) -> EtsEstimate | None:
         """Szacuje koszt ETS jako nakładkę na bieżący rachunek.
@@ -248,12 +304,23 @@ class BillCoordinator(DataUpdateCoordinator[Bill]):
         return self.entry.options.get(CONF_ENABLED_OVERRIDES, {})
 
     def _billing_period(self) -> BillingPeriod:
-        # Tryb 'od odczytu do teraz': okres od daty odczytu do bieżącej chwili.
+        period = self._raw_billing_period()
+        # Wymuszona liczba miesięcy opłat stałych (0 = auto) — nadpisuje mc.
+        if self.fixed_months_override and self.fixed_months_override > 0:
+            period = BillingPeriod(days=period.days, months=self.fixed_months_override)
+        return period
+
+    def _raw_billing_period(self) -> BillingPeriod:
+        # Tryb 'od odczytu do teraz': okres bieżący/narastający — miesiące jako
+        # ułamek (opłaty stałe naliczają się wprost z upływu czasu).
         if self.period_mode == PERIOD_MODE_SINCE and self.zero_datetime:
             return BillingPeriod.from_dates(self.zero_datetime, dt_util.now())
-        # Priorytet: jawny zakres dat z panelu.
+        # Jawny, ZAMKNIĘTY zakres dat: opłaty stałe za PEŁNE miesiące kalendarzowe
+        # (tak nalicza PGE), więc zaokrąglamy miesiące do pełnej liczby.
         if self.period_start and self.period_end:
-            return BillingPeriod.from_dates(self.period_start, self.period_end)
+            return BillingPeriod.from_dates(
+                self.period_start, self.period_end, whole_months=True
+            )
         months = Decimal(
             str(self.entry.options.get(CONF_BILLING_MONTHS, DEFAULT_BILLING_MONTHS))
         )
@@ -366,7 +433,7 @@ class BillCoordinator(DataUpdateCoordinator[Bill]):
 
     async def _async_update_data(self) -> Bill:
         profile = self.base_profile.customize(
-            rate_overrides=self.rate_overrides,
+            rate_overrides=self._rate_overrides(),
             enabled_overrides=self.enabled_overrides,
         )
         consumption = await self._read_consumption()
@@ -376,6 +443,6 @@ class BillCoordinator(DataUpdateCoordinator[Bill]):
     def effective_profile(self) -> TariffProfile:
         """Profil z aktualnymi override'ami — używany przez encje number."""
         return self.base_profile.customize(
-            rate_overrides=self.rate_overrides,
+            rate_overrides=self._rate_overrides(),
             enabled_overrides=self.enabled_overrides,
         )
