@@ -72,6 +72,21 @@ async def async_setup_entry(
         ),
     ]
 
+    # Weryfikacja faktury: zużycie i kwota „do zapłaty” z faktury.
+    if coordinator.single_zone:
+        entities += [
+            EtsParamNumber(
+                coordinator, entry, "invoice_kwh", "Faktura: zużycie",
+                0.0, coordinator.set_invoice_kwh,
+                min_value=0.0, max_value=1000000.0, step=0.1, unit="kWh",
+            ),
+            EtsParamNumber(
+                coordinator, entry, "invoice_declared", "Faktura: kwota do zapłaty",
+                0.0, coordinator.set_invoice_declared,
+                min_value=0.0, max_value=10000000.0, step=0.01, unit="zł",
+            ),
+        ]
+
     # Opłaty stałe — wymuszona liczba miesięcy (0 = auto).
     entities.append(
         EtsParamNumber(

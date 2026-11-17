@@ -25,28 +25,8 @@ from custom_components.polish_energy_bill.core.dashboard import (  # noqa: E402
     make_resolver,
 )
 
-METER = "sensor.pge_total_energy_consumption"
+from .conftest import METER  # noqa: E402
 APEX_URL = "/hacsfiles/apexcharts-card/apexcharts-card.js"
-
-
-@pytest.fixture
-async def entry(hass: HomeAssistant) -> MockConfigEntry:
-    assert await async_setup_component(hass, "lovelace", {})
-    hass.states.async_set(METER, "6200.0", {"unit_of_measurement": "kWh"})
-    config_entry = MockConfigEntry(
-        domain=DOMAIN,
-        title="Liczniki Rachunek za prąd",
-        data={
-            "name": "Liczniki Rachunek za prąd",
-            "profile": "pge_g11",
-            "mode": "sensor",
-            "zone_sensors": {"all": METER},
-        },
-    )
-    config_entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(config_entry.entry_id)
-    await hass.async_block_till_done()
-    return config_entry
 
 
 async def _install(hass: HomeAssistant, **data):

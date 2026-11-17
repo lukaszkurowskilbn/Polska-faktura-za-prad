@@ -13,9 +13,10 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import DOMAIN, MODE_SENSOR
 from .coordinator import BillCoordinator
 from .core import Bill, Group
+from .core.invoice import InvoiceError
 
 GROUP_LABEL = {
     Group.SALE: "Sprzedaż energii",
@@ -48,6 +49,17 @@ async def async_setup_entry(
     entities += [
         GroupSensor(coordinator, entry, group) for group in Group
     ]
+    if coordinator.single_zone:
+        entities += [
+            InvoiceCalcSensor(coordinator, entry),
+            InvoiceDiffSensor(coordinator, entry),
+            InvoiceStatusSensor(coordinator, entry),
+        ]
+        if coordinator.mode == MODE_SENSOR:
+            entities += [
+                TheoreticalSensor(coordinator, entry, forecast=False),
+                TheoreticalSensor(coordinator, entry, forecast=True),
+            ]
     entities += [
         PositionSensor(coordinator, entry, pos.key, pos.name)
         for pos in coordinator.base_profile.positions
@@ -335,3 +347,133 @@ class EtsCo2Sensor(_EtsEntity):
     def native_value(self):
         est = self.estimate
         return float(est.co2_kg) if est else None
+
+
+class _InvoiceBase(_BillEntity):
+    """Wspólne: wynik weryfikacji faktury albo błąd danych."""
+
+    def _check(self):
+        """(InvoiceCheck | None, komunikat błędu | None)."""
+        try:
+            return self.coordinator.invoice_check(), None
+        except InvoiceError as err:
+            return None, str(err)
+
+
+class InvoiceCalcSensor(_InvoiceBase):
+    """Kwota brutto wyliczona z danych faktury (okres + kWh)."""
+
+    _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_native_unit_of_measurement = "PLN"
+    _attr_suggested_display_precision = 2
+
+    def __init__(self, coordinator, entry) -> None:
+        super().__init__(coordinator, entry)
+        self._attr_name = "Faktura: wyliczona kwota (brutto)"
+        self._attr_unique_id = f"{entry.entry_id}_invoice_calc"
+
+    @property
+    def native_value(self):
+        check, _ = self._check()
+        return float(check.bill.gross) if check else None
+
+    @property
+    def extra_state_attributes(self):
+        check, error = self._check()
+        if check is None:
+            return {"error": error} if error else None
+        return {
+            **check.bill.as_dict(),
+            "kwh": float(check.kwh),
+            "days": check.days,
+            "months": float(check.months),
+        }
+
+
+class InvoiceDiffSensor(_InvoiceBase):
+    """Różnica: wyliczona − kwota z faktury [zł]."""
+
+    _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_native_unit_of_measurement = "PLN"
+    _attr_suggested_display_precision = 2
+
+    def __init__(self, coordinator, entry) -> None:
+        super().__init__(coordinator, entry)
+        self._attr_name = "Faktura: różnica kwoty"
+        self._attr_unique_id = f"{entry.entry_id}_invoice_diff"
+
+    @property
+    def native_value(self):
+        check, _ = self._check()
+        if check is None or check.difference is None:
+            return None
+        return float(check.difference)
+
+
+class InvoiceStatusSensor(_InvoiceBase):
+    """Czytelny status weryfikacji: zgodna / odchyłka / brak danych / błąd."""
+
+    def __init__(self, coordinator, entry) -> None:
+        super().__init__(coordinator, entry)
+        self._attr_name = "Faktura: status weryfikacji"
+        self._attr_unique_id = f"{entry.entry_id}_invoice_status"
+
+    @property
+    def native_value(self):
+        check, error = self._check()
+        if error:
+            return error
+        if check is None:
+            return "wpisz okres faktury"
+        return check.status
+
+
+class TheoreticalSensor(_BillEntity):
+    """Faktura za cały bieżący okres: stan na dziś albo prognoza na koniec."""
+
+    _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_native_unit_of_measurement = "PLN"
+    _attr_suggested_display_precision = 2
+
+    def __init__(self, coordinator, entry, forecast: bool) -> None:
+        super().__init__(coordinator, entry)
+        self._forecast = forecast
+        if forecast:
+            self._attr_name = "Faktura teoretyczna: prognoza na koniec okresu (brutto)"
+            self._attr_unique_id = f"{entry.entry_id}_theo_forecast"
+        else:
+            self._attr_name = "Faktura teoretyczna: stan na dziś (brutto)"
+            self._attr_unique_id = f"{entry.entry_id}_theo_now"
+
+    def _pick(self):
+        theo = self.coordinator.theoretical_invoice()
+        if theo is None:
+            return None, None, None
+        if self._forecast:
+            return theo, theo.bill_forecast, theo.kwh_forecast
+        return theo, theo.bill_now, theo.kwh_now
+
+    @property
+    def native_value(self):
+        _, bill, _ = self._pick()
+        return float(bill.gross) if bill else None
+
+    @property
+    def extra_state_attributes(self):
+        theo, bill, kwh = self._pick()
+        if theo is None or bill is None:
+            return None
+        return {
+            **bill.as_dict(),
+            "consumption_kwh": float(kwh),
+            "period_start": theo.start.isoformat(),
+            "period_end": theo.end.isoformat(),
+            "days_elapsed": theo.days_elapsed,
+            "days_total": theo.days_total,
+            "estimate": self._forecast,
+            "basis": (
+                "szacunek: zużycie do dziś przeskalowane do końca okresu wg średniej dziennej"
+                if self._forecast
+                else "zużycie rzeczywiste do dziś, opłaty stałe za cały okres"
+            ),
+        }

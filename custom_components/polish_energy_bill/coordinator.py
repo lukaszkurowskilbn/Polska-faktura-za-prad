@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import calendar
 import logging
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -55,9 +56,33 @@ from .core import (
     estimate_ets,
     power_fee_rate_for,
 )
+from .core.invoice import (
+    InvoiceCheck,
+    add_months,
+    check_invoice,
+    project_consumption,
+    theoretical_bill,
+)
 
 _LOGGER = logging.getLogger(__name__)
 UPDATE_INTERVAL = timedelta(minutes=1)
+
+# Domyślna długość okresu „faktury teoretycznej”, gdy nie wpisano daty końca.
+DEFAULT_PERIOD_MONTHS = 2
+
+
+@dataclass(frozen=True)
+class TheoreticalInvoice:
+    """Rachunek za cały bieżący okres: stan na dziś i prognoza na koniec."""
+
+    start: date
+    end: date
+    days_elapsed: int
+    days_total: int
+    kwh_now: Decimal
+    bill_now: Bill
+    kwh_forecast: Decimal | None
+    bill_forecast: Bill | None
 
 
 class BillCoordinator(DataUpdateCoordinator[Bill]):
@@ -104,6 +129,12 @@ class BillCoordinator(DataUpdateCoordinator[Bill]):
         self.ets_eua_price: Decimal = Decimal(str(DEFAULT_ETS_EUA_PRICE))
         self.ets_eur_pln: Decimal = Decimal(str(DEFAULT_ETS_EUR_PLN))
 
+        # Weryfikacja faktury: dane wpisane z papierowej/PDF faktury.
+        self.invoice_start: date | None = None
+        self.invoice_end: date | None = None
+        self.invoice_kwh: Decimal = Decimal("0")
+        self.invoice_declared: Decimal = Decimal("0")
+
         # Opłaty stałe: wymuszona liczba miesięcy (0 = auto).
         self.fixed_months_override: Decimal = Decimal(str(DEFAULT_FIXED_MONTHS_OVERRIDE))
 
@@ -139,6 +170,7 @@ class BillCoordinator(DataUpdateCoordinator[Bill]):
     @callback
     def set_period_end(self, value: date | None) -> None:
         self.period_end = value
+        self.async_update_listeners()  # sensory zależne od pola odświeżają się od razu
 
     @callback
     def set_zero_datetime(self, value: datetime | None) -> None:
@@ -151,6 +183,26 @@ class BillCoordinator(DataUpdateCoordinator[Bill]):
     @callback
     def set_end_reading(self, zone: Zone, value: float) -> None:
         self.end_readings[zone] = Decimal(str(value))
+
+    @callback
+    def set_invoice_start(self, value: date | None) -> None:
+        self.invoice_start = value
+        self.async_update_listeners()  # sensory zależne od pola odświeżają się od razu
+
+    @callback
+    def set_invoice_end(self, value: date | None) -> None:
+        self.invoice_end = value
+        self.async_update_listeners()  # sensory zależne od pola odświeżają się od razu
+
+    @callback
+    def set_invoice_kwh(self, value: float) -> None:
+        self.invoice_kwh = Decimal(str(value))
+        self.async_update_listeners()  # sensory zależne od pola odświeżają się od razu
+
+    @callback
+    def set_invoice_declared(self, value: float) -> None:
+        self.invoice_declared = Decimal(str(value))
+        self.async_update_listeners()  # sensory zależne od pola odświeżają się od razu
 
     @callback
     def register_baseline_entity(self, zone: Zone, entity: Any) -> None:
@@ -216,6 +268,64 @@ class BillCoordinator(DataUpdateCoordinator[Bill]):
         Auto-segment opłaty mocowej ma priorytet nad ręczną stawką tej pozycji.
         """
         return {**self.rate_overrides, **self._power_fee_override()}
+
+    @property
+    def single_zone(self) -> bool:
+        """Faktura wpisywana jedną liczbą kWh ma sens tylko dla taryfy jednostrefowej."""
+        return set(self.base_profile.zones) == {Zone.ALL}
+
+    def invoice_check(self) -> InvoiceCheck | None:
+        """Weryfikacja faktury; None, gdy brak okresu/taryfa wielostrefowa.
+
+        Rzuca InvoiceError przy niepoprawnych danych (np. koniec przed początkiem).
+        """
+        if not self.single_zone or not self.invoice_start or not self.invoice_end:
+            return None
+        return check_invoice(
+            self.effective_profile(),
+            self.invoice_kwh,
+            self.invoice_start,
+            self.invoice_end,
+            self.invoice_declared,
+        )
+
+    def theoretical_invoice(self) -> TheoreticalInvoice | None:
+        """Faktura za cały bieżący okres liczona przed jego końcem.
+
+        Start = data odczytu (punkt zero), koniec = „Okres do” (domyślnie +2 mc).
+        Działa w trybach liczących od odczytu do teraz („Z faktury”, „Od odczytu”).
+        """
+        if (
+            not self.single_zone
+            or self.period_mode not in (PERIOD_MODE_INVOICE, PERIOD_MODE_SINCE)
+            or self.zero_datetime is None
+            or self.data is None
+        ):
+            return None
+        start_dt = dt_util.as_local(self.zero_datetime)
+        start = start_dt.date()
+        end = self.period_end or add_months(start, DEFAULT_PERIOD_MONTHS)
+        if end <= start:
+            return None
+        end_dt = dt_util.start_of_local_day(end) + timedelta(days=1)
+        now = dt_util.now()
+        profile = self.effective_profile()
+        kwh_now = self.data.consumption_kwh
+        kwh_forecast = project_consumption(kwh_now, start_dt, now, end_dt)
+        return TheoreticalInvoice(
+            start=start,
+            end=end,
+            days_elapsed=max(0, (now - start_dt).days),
+            days_total=(end_dt - start_dt).days,
+            kwh_now=kwh_now,
+            bill_now=theoretical_bill(profile, kwh_now, start, end),
+            kwh_forecast=kwh_forecast,
+            bill_forecast=(
+                theoretical_bill(profile, kwh_forecast, start, end)
+                if kwh_forecast is not None
+                else None
+            ),
+        )
 
     def ets_estimate(self) -> EtsEstimate | None:
         """Szacuje koszt ETS jako nakładkę na bieżący rachunek.

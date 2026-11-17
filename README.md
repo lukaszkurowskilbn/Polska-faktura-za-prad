@@ -184,6 +184,29 @@ netto zł/mc):
 Gdy URE ogłosi stawki na kolejny rok — podmień pola segmentów. (Dla porównania:
 faktura 408000059008 ma „Opłata mocowa seg.4" = 24,05, bo roczne zużycie > 2800 kWh.)
 
+## Weryfikacja faktury i faktura teoretyczna
+
+Dla taryf **jednostrefowych** (np. G11). Obie rzeczy są w panelu, w sekcjach na górze.
+
+**Weryfikacja faktury.** Wpisz z faktury okres (np. 21.05.2026 – 20.07.2026), zużycie
+w kWh i kwotę do zapłaty. Dodatek liczy ten sam rachunek swoimi stawkami (opłaty stałe
+za pełne miesiące, kWh w pełnych liczbach — tak jak PGE) i pokazuje **wyliczoną kwotę,
+różnicę i status**: „zgodna" (do 1 gr) albo „odchyłka". Liczy po *aktualnych* stawkach
+z dodatku — przy fakturze ze starymi stawkami różnica będzie niezerowa i to jest właśnie
+sygnał. Działa także w trybie ręcznym.
+
+**Faktura teoretyczna za bieżący okres.** W trybach liczących od odczytu do teraz
+(„Z faktury", „Od odczytu") dodatek pokazuje rachunek **za cały okres od odczytu do daty
+końca**, zanim ten okres się skończy:
+
+- **stan na dziś** — zużycie rzeczywiste do teraz, opłaty stałe za cały okres,
+- **prognoza na koniec okresu** — **szacunek**: zużycie do dziś przeskalowane do końca
+  okresu średnią dzienną. Poniżej doby danych pokazuje „unknown", zamiast zgadywać.
+
+Początek to data odczytu z faktury (punkt zero), koniec to edytowalne pole **„Okres do"**
+(puste = początek + 2 miesiące). Atrybuty sensorów mają rozbicie na pozycje, dni i podstawę
+wyliczenia.
+
 ## Osobny panel (dashboard)
 
 Dodatek sam tworzy osobny dashboard w pasku bocznym (jak „Energia"). Pokazuje

@@ -26,11 +26,67 @@ views:
                 name: Data końcowego odczytu z faktury
               - entity: number.rachunek_za_prad_odczyt_zero_calodobowa
                 name: Końcowe wskazanie licznika z faktury
+              - entity: date.liczniki_rachunek_za_prad_okres_do
+                name: Koniec okresu (edytowalny; puste = +2 miesiące)
           - type: tile
             entity: sensor.rachunek_za_prad_do_zaplaty_brutto
             name: Do zapłaty (prognoza, narastająco)
             icon: mdi:cash-clock
             color: red
+          - type: heading
+            heading: Faktura teoretyczna za cały okres
+            heading_style: subtitle
+          - type: markdown
+            content: >
+              Rachunek **za cały okres od odczytu do daty końca**, z opłatami
+              stałymi za pełne miesiące — tak jak na fakturze. „Stan na dziś"
+              liczy zużycie rzeczywiste do teraz. „Prognoza" to **szacunek**:
+              zużycie do dziś przeskalowane do końca okresu średnią dzienną
+              (wymaga co najmniej doby danych).
+          - type: tile
+            entity: sensor.rachunek_za_prad_faktura_teoretyczna_stan_na_dzis_brutto
+            name: Faktura teoretyczna — stan na dziś
+            icon: mdi:receipt-text-clock
+            color: orange
+          - type: tile
+            entity: sensor.rachunek_za_prad_faktura_teoretyczna_prognoza_na_koniec_okresu_brutto
+            name: Faktura teoretyczna — prognoza na koniec okresu
+            icon: mdi:receipt-text-arrow-right
+            color: deep-orange
+        column_span: 2
+      - type: grid
+        cards:
+          - type: heading
+            heading: Weryfikacja faktury
+            heading_style: title
+          - type: markdown
+            content: >
+              Wpisz z faktury **okres**, **zużycie (kWh)** i **kwotę do zapłaty**.
+              Dodatek policzy ten sam rachunek swoimi stawkami i pokaże różnicę.
+              Zgodność co do grosza oznacza, że stawki się zgadzają; odchyłka
+              — sprawdź, czy sprzedawca czegoś nie zmienił.
+          - type: entities
+            entities:
+              - entity: date.rachunek_za_prad_faktura_okres_od
+                name: Okres od (z faktury)
+              - entity: date.rachunek_za_prad_faktura_okres_do
+                name: Okres do (z faktury)
+              - entity: number.rachunek_za_prad_faktura_zuzycie
+                name: Zużycie z faktury [kWh]
+              - entity: number.rachunek_za_prad_faktura_kwota_do_zaplaty
+                name: Kwota do zapłaty z faktury [zł]
+          - type: tile
+            entity: sensor.rachunek_za_prad_faktura_wyliczona_kwota_brutto
+            name: Wyliczona kwota (brutto)
+            icon: mdi:calculator
+          - type: tile
+            entity: sensor.rachunek_za_prad_faktura_roznica_kwoty
+            name: Różnica (wyliczona − z faktury)
+            icon: mdi:plus-minus-variant
+          - type: tile
+            entity: sensor.rachunek_za_prad_faktura_status_weryfikacji
+            name: Status
+            icon: mdi:check-decagram
         column_span: 2
       - type: grid
         cards:

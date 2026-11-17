@@ -19,14 +19,19 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     coordinator: BillCoordinator = hass.data[DOMAIN][entry.entry_id]
-    if coordinator.mode != MODE_SENSOR:
-        return
-    async_add_entities(
-        [
+    entities: list[PeriodDate] = []
+    if coordinator.single_zone:
+        # Weryfikacja faktury działa też w trybie ręcznym (nie czyta sensora).
+        entities += [
+            InvoiceDate(coordinator, entry, "start", "Faktura: okres od"),
+            InvoiceDate(coordinator, entry, "end", "Faktura: okres do"),
+        ]
+    if coordinator.mode == MODE_SENSOR:
+        entities += [
             PeriodDate(coordinator, entry, "start", "Okres od"),
             PeriodDate(coordinator, entry, "end", "Okres do"),
         ]
-    )
+    async_add_entities(entities)
 
 
 class PeriodDate(RestoreEntity, DateEntity):
@@ -77,3 +82,19 @@ class PeriodDate(RestoreEntity, DateEntity):
         self._push()
         self.async_write_ha_state()
         await self.coordinator.async_request_refresh()
+
+
+class InvoiceDate(PeriodDate):
+    """Granica okresu z wpisywanej faktury (weryfikacja faktury)."""
+
+    def __init__(
+        self, coordinator: BillCoordinator, entry: ConfigEntry, which: str, label: str
+    ) -> None:
+        super().__init__(coordinator, entry, which, label)
+        self._attr_unique_id = f"{entry.entry_id}_invoice_{which}"
+
+    def _push(self) -> None:
+        if self._which == "start":
+            self.coordinator.set_invoice_start(self._attr_native_value)
+        else:
+            self.coordinator.set_invoice_end(self._attr_native_value)
