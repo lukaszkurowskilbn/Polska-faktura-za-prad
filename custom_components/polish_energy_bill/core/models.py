@@ -6,6 +6,7 @@ bo pieniądze i ułamki groszy nie wybaczają floatów.
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
 from enum import Enum
@@ -228,3 +229,32 @@ def _dec(value: Decimal | str | float | int) -> Decimal:
     if isinstance(value, float):
         return Decimal(str(value))
     return Decimal(value)
+
+
+def round_kwh(value: Decimal | str | float | int) -> Decimal:
+    """Zużycie rozliczane w PEŁNYCH kWh, połówki w górę (jak na fakturze PGE).
+
+    Dane pomiarowe z OSD PGE zaokrągla do całych kWh:
+    4709,5 → 5343,0 = 633,5 → 634 (faktura 408000059008),
+    5343,0 → 6136,3 = 793,3 → 793 (faktura 470000065575).
+    """
+    return _dec(value).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+
+
+def consumption_from_readings(
+    starts: Mapping[Zone, Decimal],
+    ends: Mapping[Zone, Decimal],
+    zones: Iterable[Zone],
+) -> dict[Zone, Decimal]:
+    """Zużycie per strefa z różnicy odczytów licznika (koniec − początek).
+
+    Strefy bez kompletu odczytów są pomijane, różnica ujemna daje 0. Wynik jest
+    zaokrąglony do pełnych kWh (round_kwh), bo tak PGE rozlicza zużycie.
+    """
+    out: dict[Zone, Decimal] = {}
+    for zone in zones:
+        start, end = starts.get(zone), ends.get(zone)
+        if start is None or end is None:
+            continue
+        out[zone] = round_kwh(max(Decimal("0"), _dec(end) - _dec(start)))
+    return out

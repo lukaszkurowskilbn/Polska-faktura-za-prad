@@ -47,14 +47,27 @@ views:
               {'per_kwh':'kWh','per_mwh':'MWh','per_month':'mc','per_day':'dni','flat':'szt'}
               %}
 
+              {% set mode = states('select.liczniki_rachunek_za_prad_tryb_zuzycia_okresu') %}
+
+              {% set zero = states('datetime.liczniki_rachunek_za_prad_punkt_zero_data_i_godzina_odczytu') %}
+
               {% set d1 = states('date.liczniki_rachunek_za_prad_okres_od') %}
 
               {% set d2 = states('date.liczniki_rachunek_za_prad_okres_do') %}
 
-              {% if d1 not in ['unknown','unavailable'] and d2 not in
-              ['unknown','unavailable'] %}
+              {% set bad = ['unknown','unavailable','none',''] %}
 
-              ### Okres: {{ d1 }} → {{ d2 }}
+              {% if ('Z faktury' in mode or 'Od odczytu' in mode) and zero not in bad %}
+
+              ### Okres: od odczytu {{ as_local(as_datetime(zero)).strftime('%d.%m.%Y') }} → teraz ({{ now().strftime('%d.%m.%Y') }})
+
+              {% elif 'Punkt zero' in mode %}
+
+              ### Okres: od punktu zero → teraz
+
+              {% elif d1 not in bad and d2 not in bad %}
+
+              ### Okres: {{ strptime(d1, '%Y-%m-%d').strftime('%d.%m.%Y') }} → {{ strptime(d2, '%Y-%m-%d').strftime('%d.%m.%Y') }}
 
               {% endif %}
 

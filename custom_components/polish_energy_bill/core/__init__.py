@@ -16,6 +16,8 @@ from .models import (
     TariffProfile,
     Unit,
     Zone,
+    consumption_from_readings,
+    round_kwh,
 )
 from .profiles import ProfileError, load_builtin_profiles, load_profile_file
 
@@ -39,6 +41,8 @@ __all__ = [
     "TariffProfile",
     "Unit",
     "Zone",
+    "consumption_from_readings",
+    "round_kwh",
     "ProfileError",
     "load_builtin_profiles",
     "load_profile_file",

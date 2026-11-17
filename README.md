@@ -33,6 +33,13 @@ Na fakturze z **pojedynczym odczytem** (nr 408000059008, G11, 634 kWh, okres
 21.05–20.07.2026) kalkulator trafia **co do grosza na całości**: 639,10 / 146,99 /
 **786,09 zł** — dokładnie jak faktura (test `test_real_invoice_408000059008_exact`).
 
+Zużycie PGE rozlicza w **pełnych kWh** (dane z OSD): 4709,5→5343,0 = 633,5 → **634**,
+5343,0→6136,3 = 793,3 → **793**. W trybie *Ręczne odczyty* dodatek zaokrągla różnicę
+odczytów tak samo (połówki w górę), dzięki czemu faktura nr 470000065575 (G11,
+21.07–20.09.2026, 793 kWh) wychodzi **co do grosza**: 781,19 / 179,67 / **960,86 zł**
+(test `test_invoice_470000065575_exact`). Tryby bieżące (*Z faktury*, *Od odczytu do
+teraz*) liczą zużycie wprost z licznika, bez zaokrąglenia — to prognoza narastająca.
+
 Opłaty stałe PGE nalicza za **pełne miesiące kalendarzowe** (na tej fakturze
 01.06–31.07 = 2 mc), a okres odczytu energii bywa inny (21.05–20.07). Dodatek to
 odwzorowuje: dla **zamkniętego zakresu dat** zaokrągla miesiące opłat stałych do

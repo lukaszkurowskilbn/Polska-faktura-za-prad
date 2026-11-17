@@ -43,6 +43,7 @@ from .core import (
     Bill,
     BillingPeriod,
     Consumption,
+    consumption_from_readings,
     EtsEstimate,
     EtsMethod,
     EtsParams,
@@ -344,13 +345,13 @@ class BillCoordinator(DataUpdateCoordinator[Bill]):
             by_zone = dict(self.manual_consumption)
 
         elif self.period_mode == PERIOD_MODE_READINGS:
-            # Różnica: odczyt końcowy - początkowy (per strefa).
-            for zone_name in self.zone_sensors:
-                zone = Zone(zone_name)
-                start = self.start_readings.get(zone)
-                end = self.end_readings.get(zone)
-                if start is not None and end is not None:
-                    by_zone[zone] = max(Decimal("0"), end - start)
+            # Różnica: odczyt końcowy - początkowy (per strefa), w PEŁNYCH kWh —
+            # tak PGE rozlicza zużycie (633,5 → 634; 793,3 → 793).
+            by_zone = consumption_from_readings(
+                self.start_readings,
+                self.end_readings,
+                (Zone(zone_name) for zone_name in self.zone_sensors),
+            )
 
         elif self.period_mode == PERIOD_MODE_SINCE and self.zero_datetime:
             # Od daty+godziny odczytu do teraz — przyrost licznika z historii.

@@ -19,6 +19,9 @@ from core import (
     power_fee_rate_for,
     power_fee_segment_for,
     SEGMENT_THRESHOLDS,
+    DEFAULT_SEGMENT_RATES_2026,
+    consumption_from_readings,
+    round_kwh,
 )
 
 
@@ -135,3 +138,66 @@ def test_invoice_mode_fixed_fees_scale_with_time():
     assert b2.line("oplata_mocowa_stala").net > b1.line("oplata_mocowa_stala").net
     # Zużycie (część zmienna) takie samo — zależy od licznika, nie od czasu.
     assert b1.line("energia_czynna").net == b2.line("energia_czynna").net
+
+
+# --------------------------------------------------------------------------
+# Zużycie z odczytów — pełne kWh jak na fakturze PGE
+# --------------------------------------------------------------------------
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [("633.5", "634"), ("793.3", "793"), ("0.5", "1"), ("0.49", "0"), ("793", "793")],
+)
+def test_round_kwh_half_up(value, expected):
+    assert round_kwh(D(value)) == D(expected)
+
+
+def test_consumption_from_readings_whole_kwh():
+    """4709,5→5343,0 = 633,5 → 634 (FV 408…); 5343,0→6136,3 = 793,3 → 793 (FV 470…)."""
+    z = [Zone.ALL]
+    assert consumption_from_readings({Zone.ALL: D("4709.5")}, {Zone.ALL: D("5343.0")}, z) == {Zone.ALL: D("634")}
+    assert consumption_from_readings({Zone.ALL: D("5343.0")}, {Zone.ALL: D("6136.3")}, z) == {Zone.ALL: D("793")}
+
+
+def test_consumption_from_readings_zones_negative_and_missing():
+    starts = {Zone.DAY: D("100.4"), Zone.NIGHT: D("50.5")}
+    ends = {Zone.DAY: D("200.0"), Zone.NIGHT: D("90.0")}
+    assert consumption_from_readings(starts, ends, [Zone.DAY, Zone.NIGHT]) == {
+        Zone.DAY: D("100"),    # 99,6 → 100
+        Zone.NIGHT: D("40"),   # 39,5 → 40 (połówka w górę)
+    }
+    # odczyt końcowy mniejszy od początkowego → 0, nigdy ujemne
+    assert consumption_from_readings({Zone.ALL: D("10")}, {Zone.ALL: D("5")}, [Zone.ALL]) == {Zone.ALL: D("0")}
+    # strefa bez kompletu odczytów jest pomijana
+    assert consumption_from_readings({Zone.DAY: D("1")}, {Zone.DAY: D("3")}, [Zone.DAY, Zone.NIGHT]) == {Zone.DAY: D("2")}
+
+
+def test_invoice_470000065575_exact():
+    """Faktura PGE 470000065575: G11, 21.07–20.09.2026, 793 kWh — CO DO GROSZA.
+
+    Odczyty 5343,0 → 6136,3 (różnica 793,3) PGE rozlicza jako 793 kWh. Opłaty stałe
+    za 2 pełne mc (01.08–30.09), opłata mocowa seg.4 z rocznego zużycia 3632 kWh.
+    Bez zaokrąglenia zużycia wyszłoby 781,46 / 179,74 / 961,20 zł (o 34 gr za dużo).
+    """
+    g11 = load_builtin_profiles()["pge_g11"].with_overrides(
+        {"oplata_mocowa_stala": power_fee_rate_for(D("3632"), DEFAULT_SEGMENT_RATES_2026)}
+    )
+    cons = Consumption(
+        consumption_from_readings({Zone.ALL: D("5343.0")}, {Zone.ALL: D("6136.3")}, [Zone.ALL])
+    )
+    bp = BillingPeriod.from_dates(date(2026, 7, 21), date(2026, 9, 20), whole_months=True)
+    bill = calculate(g11, cons, bp)
+
+    expected = {
+        "energia_czynna": "399.04",
+        "oplata_dystr_sieciowa": "275.09",
+        "oplata_dystr_jakosciowa": "26.33",
+        "oplata_kogeneracyjna": "2.38",
+        "oplata_oze": "5.79",
+        "oplata_mocowa_stala": "48.10",
+        "oplata_stala_dystr": "19.96",
+        "abonament_dystr": "4.50",
+    }
+    for key, net in expected.items():
+        assert bill.line(key).net == D(net), key
+    assert (bill.net, bill.vat, bill.gross) == (D("781.19"), D("179.67"), D("960.86"))
