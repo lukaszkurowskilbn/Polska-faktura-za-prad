@@ -102,6 +102,12 @@ wpisujesz zużycie w kWh.
 W panelu wybierasz **okres rozliczeniowy datami „od–do"** oraz **tryb** liczenia
 zużycia (encja select „Tryb zużycia okresu"):
 
+- **Z faktury (domyślny, najprostszy)** — wpisujesz dwie rzeczy z ostatniej
+  faktury: **datę końcowego odczytu** i **końcowe wskazanie licznika**. Dodatek
+  pokazuje narastający rachunek bieżącego okresu: zużycie = bieżący licznik −
+  wskazanie (dokładnie, z realnego licznika), a opłaty stałe liczą się
+  proporcjonalnie do czasu od tej daty. Na kolejnej fakturze zmieniasz tylko te
+  dwa pola. Karta „Nowy okres z faktury" na górze panelu robi to w dwóch polach.
 - **Od odczytu do teraz** — wpisujesz **datę i godzinę odczytu** z faktury (encja
   „Punkt zero — data i godzina odczytu"). Integracja liczy zużycie i koszt od tej
   chwili do teraz, z historii licznika. To bieżący, narastający rachunek od

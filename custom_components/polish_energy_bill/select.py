@@ -16,6 +16,7 @@ from .const import (
     ETS_METHODS,
     MODE_SENSOR,
     PERIOD_MODE_HISTORY,
+    PERIOD_MODE_INVOICE,
     PERIOD_MODE_READINGS,
     PERIOD_MODE_SINCE,
     PERIOD_MODE_ZERO,
@@ -28,6 +29,7 @@ from .coordinator import BillCoordinator
 
 # Czytelne etykiety trybów (opcje selecta to surowe klucze; tłumaczenie w UI).
 LABELS = {
+    PERIOD_MODE_INVOICE: "Z faktury (data odczytu + wskazanie → do teraz)",
     PERIOD_MODE_SINCE: "Od odczytu do teraz (data+godzina)",
     PERIOD_MODE_ZERO: "Punkt zero (bieżący − zero)",
     PERIOD_MODE_HISTORY: "Auto z historii (zakres dat)",
@@ -73,7 +75,7 @@ class PeriodModeSelect(RestoreEntity, SelectEntity):
         self._entry = entry
         self._attr_name = "Tryb zużycia okresu"
         self._attr_unique_id = f"{entry.entry_id}_period_mode"
-        self._attr_current_option = LABELS[PERIOD_MODE_ZERO]
+        self._attr_current_option = LABELS[PERIOD_MODE_INVOICE]
         self._rev = {v: k for k, v in LABELS.items()}
 
     @property
