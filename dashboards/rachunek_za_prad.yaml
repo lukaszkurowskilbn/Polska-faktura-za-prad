@@ -9,6 +9,32 @@ views:
       - type: grid
         cards:
           - type: heading
+            heading: Nowy okres z faktury
+            heading_style: title
+          - type: markdown
+            content: >
+              Wpisz dwie rzeczy z ostatniej faktury: **datę końcowego odczytu**
+              i **końcowe wskazanie licznika**. Dodatek pokaże narastający
+              rachunek bieżącego okresu: zużycie = bieżący licznik − wskazanie,
+              a opłaty stałe liczą się proporcjonalnie do czasu. Na kolejnej
+              fakturze zmieniasz tylko te dwa pola.
+          - type: entities
+            entities:
+              - entity: select.liczniki_rachunek_za_prad_tryb_zuzycia_okresu
+                name: Tryb (ustaw „Z faktury")
+              - entity: datetime.liczniki_rachunek_za_prad_punkt_zero_data_i_godzina_odczytu
+                name: Data końcowego odczytu z faktury
+              - entity: number.rachunek_za_prad_odczyt_zero_calodobowa
+                name: Końcowe wskazanie licznika z faktury
+          - type: tile
+            entity: sensor.rachunek_za_prad_do_zaplaty_brutto
+            name: Do zapłaty (prognoza, narastająco)
+            icon: mdi:cash-clock
+            color: red
+        column_span: 2
+      - type: grid
+        cards:
+          - type: heading
             heading: Rozbicie pozycji (jak na fakturze)
             heading_style: title
           - type: markdown
@@ -395,10 +421,13 @@ views:
       - type: grid
         cards:
           - type: heading
-            heading: Zakres, tryb, punkt zero i stawki
+            heading: Zaawansowane — tryby i pola okresu
             heading_style: title
           - type: markdown
             content: >
+              Normalnie wystarczy karta „Nowy okres z faktury" na górze. Poniżej
+              pełna kontrola, jeśli chcesz liczyć inaczej.
+
               **Zakres dat i tryb.** Wybierz, jak liczyć zużycie w okresie: *Od
               odczytu do teraz* (wpisujesz datę i godzinę odczytu z faktury —
               koszt liczy się od tej chwili do teraz), *Auto z historii* (jawny

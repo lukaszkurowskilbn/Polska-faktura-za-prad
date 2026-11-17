@@ -31,6 +31,7 @@ from .const import (
     ETS_METHOD_PERCENT,
     MODE_MANUAL,
     PERIOD_MODE_HISTORY,
+    PERIOD_MODE_INVOICE,
     PERIOD_MODE_READINGS,
     PERIOD_MODE_SINCE,
     PERIOD_MODE_ZERO,
@@ -85,7 +86,7 @@ class BillCoordinator(DataUpdateCoordinator[Bill]):
         self._baseline_entities: dict[Zone, Any] = {}
 
         # Zakres dat + tryb ustalania zużycia w okresie:
-        self.period_mode: str = PERIOD_MODE_ZERO
+        self.period_mode: str = PERIOD_MODE_INVOICE
         self.period_start: date | None = None
         self.period_end: date | None = None
         # Punkt zero jako moment w czasie (tryb 'od_odczytu'):
@@ -311,9 +312,13 @@ class BillCoordinator(DataUpdateCoordinator[Bill]):
         return period
 
     def _raw_billing_period(self) -> BillingPeriod:
-        # Tryb 'od odczytu do teraz': okres bieżący/narastający — miesiące jako
-        # ułamek (opłaty stałe naliczają się wprost z upływu czasu).
-        if self.period_mode == PERIOD_MODE_SINCE and self.zero_datetime:
+        # Tryby bieżące/narastające ('Z faktury' i 'od odczytu do teraz'):
+        # okres od daty odczytu do teraz, miesiące jako ułamek (opłaty stałe
+        # naliczają się wprost z upływu czasu).
+        if (
+            self.period_mode in (PERIOD_MODE_INVOICE, PERIOD_MODE_SINCE)
+            and self.zero_datetime
+        ):
             return BillingPeriod.from_dates(self.zero_datetime, dt_util.now())
         # Jawny, ZAMKNIĘTY zakres dat: opłaty stałe za PEŁNE miesiące kalendarzowe
         # (tak nalicza PGE), więc zaokrąglamy miesiące do pełnej liczby.
@@ -366,7 +371,10 @@ class BillCoordinator(DataUpdateCoordinator[Bill]):
                     by_zone[Zone(zone_name)] = used
 
         else:
-            # Punkt zero: bieżący odczyt - punkt zero.
+            # Punkt zero ORAZ 'Z faktury': zużycie = bieżący odczyt licznika −
+            # wskazanie bazowe (odczyt zero). W trybie 'Z faktury' to wskazanie
+            # końcowe z poprzedniej faktury, a okres (opłaty stałe) liczy się od
+            # daty odczytu do teraz — patrz _raw_billing_period.
             for zone_name, entity_id in self.zone_sensors.items():
                 value = self._read_sensor(entity_id)
                 if value is None:

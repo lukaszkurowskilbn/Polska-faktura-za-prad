@@ -99,3 +99,39 @@ def test_auto_power_fee_matches_invoice():
     prof = g11.customize(rate_overrides={"oplata_mocowa_stala": rate})
     bill = calculate(prof, Consumption({Zone.ALL: D("634")}), BillingPeriod(months=D("2")))
     assert bill.line("oplata_mocowa_stala").net == D("48.10")  # 2 × 24,05
+
+
+# --------------------------------------------------------------------------
+# Tryb „Z faktury": zużycie = licznik − wskazanie, opłaty stałe proporcjonalnie
+# --------------------------------------------------------------------------
+
+def test_invoice_mode_math():
+    """Zużycie z różnicy licznik−wskazanie + okres proporcjonalny do czasu.
+
+    To kontrakt trybu „Z faktury": consumption = bieżący licznik − końcowe
+    wskazanie z FV; okres (opłaty stałe) = from_dates(data odczytu, teraz),
+    ułamek miesięcy (narastająco). Dla dokładnie 2,0 mc daje 2 × opłaty stałe.
+    """
+    from datetime import date as _date
+
+    g11 = load_builtin_profiles()["pge_g11"]
+    bp = BillingPeriod.from_dates(_date(2026, 1, 31), _date(2026, 3, 31))  # 2,0 mc
+    assert bp.months == D("2")
+    meter_now, reading = D("5977"), D("5343")       # 634 kWh
+    bill = calculate(g11, Consumption({Zone.ALL: meter_now - reading}), bp)
+    assert bill.consumption_kwh == D("634")
+    assert bill.line("oplata_mocowa_stala").net == D("48.10")   # 2 × 24,05
+    assert bill.gross == D("786.09")
+
+
+def test_invoice_mode_fixed_fees_scale_with_time():
+    """Im dłużej od odczytu, tym większe opłaty stałe (proporcjonalnie)."""
+    from datetime import date as _date
+
+    g11 = load_builtin_profiles()["pge_g11"]
+    cons = Consumption({Zone.ALL: D("100")})
+    b1 = calculate(g11, cons, BillingPeriod.from_dates(_date(2026, 1, 1), _date(2026, 2, 1)))
+    b2 = calculate(g11, cons, BillingPeriod.from_dates(_date(2026, 1, 1), _date(2026, 3, 1)))
+    assert b2.line("oplata_mocowa_stala").net > b1.line("oplata_mocowa_stala").net
+    # Zużycie (część zmienna) takie samo — zależy od licznika, nie od czasu.
+    assert b1.line("energia_czynna").net == b2.line("energia_czynna").net
