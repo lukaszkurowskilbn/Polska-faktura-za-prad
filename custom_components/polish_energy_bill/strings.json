@@ -35,5 +35,29 @@
         }
       }
     }
+  },
+  "services": {
+    "install_dashboard": {
+      "name": "Zainstaluj dashboard",
+      "description": "Tworzy dashboard „Rachunek za prąd” z encjami tej integracji (jednorazowa, edytowalna kopia). Istniejącego dashboardu nie nadpisuje, chyba że ustawisz overwrite.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Wpis integracji",
+          "description": "Wymagany tylko, gdy masz kilka wpisów integracji."
+        },
+        "url_path": {
+          "name": "Adres (url_path)",
+          "description": "Adres dashboardu, np. rachunek-za-prad (musi zawierać myślnik)."
+        },
+        "title": {
+          "name": "Tytuł",
+          "description": "Tytuł w panelu bocznym. Domyślnie „Rachunek za prąd”."
+        },
+        "overwrite": {
+          "name": "Nadpisz istniejący",
+          "description": "Podmienia konfigurację istniejącego dashboardu na świeżą (ręczne zmiany przepadną)."
+        }
+      }
+    }
   }
 }

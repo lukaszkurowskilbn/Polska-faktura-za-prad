@@ -4,15 +4,94 @@ from __future__ import annotations
 
 import logging
 
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+import voluptuous as vol
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState
+from homeassistant.core import (
+    HomeAssistant,
+    ServiceCall,
+    ServiceResponse,
+    SupportsResponse,
+)
 from homeassistant.exceptions import ConfigEntryError
+from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.typing import ConfigType
 
-from .const import CONF_PROFILE, DOMAIN, PLATFORMS
+from .const import (
+    ATTR_CONFIG_ENTRY_ID,
+    ATTR_OVERWRITE,
+    ATTR_TITLE,
+    ATTR_URL_PATH,
+    CONF_PROFILE,
+    DOMAIN,
+    PLATFORMS,
+    SERVICE_INSTALL_DASHBOARD,
+)
 from .coordinator import BillCoordinator
 from .core import ProfileError, load_builtin_profiles
+from .dashboard_install import (
+    DEFAULT_URL_PATH,
+    DashboardInstallError,
+    async_install_dashboard,
+)
 
 _LOGGER = logging.getLogger(__name__)
+
+INSTALL_DASHBOARD_SCHEMA = vol.Schema(
+    {
+        vol.Optional(ATTR_CONFIG_ENTRY_ID): cv.string,
+        vol.Optional(ATTR_URL_PATH, default=DEFAULT_URL_PATH): cv.string,
+        vol.Optional(ATTR_TITLE): cv.string,
+        vol.Optional(ATTR_OVERWRITE, default=False): cv.boolean,
+    }
+)
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Rejestracja usług integracji (raz, niezależnie od liczby wpisów)."""
+
+    async def _handle_install_dashboard(call: ServiceCall) -> ServiceResponse:
+        entry = _select_entry(hass, call.data.get(ATTR_CONFIG_ENTRY_ID))
+        result = await async_install_dashboard(
+            hass,
+            entry,
+            url_path=call.data[ATTR_URL_PATH],
+            title=call.data.get(ATTR_TITLE),
+            overwrite=call.data[ATTR_OVERWRITE],
+        )
+        return result.as_dict()
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_INSTALL_DASHBOARD,
+        _handle_install_dashboard,
+        schema=INSTALL_DASHBOARD_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    return True
+
+
+def _select_entry(hass: HomeAssistant, entry_id: str | None) -> ConfigEntry:
+    """Wpis konfiguracji dla usługi: wskazany albo jedyny załadowany."""
+    loaded = [
+        item
+        for item in hass.config_entries.async_entries(DOMAIN)
+        if item.state is ConfigEntryState.LOADED
+    ]
+    if entry_id is not None:
+        for entry in loaded:
+            if entry.entry_id == entry_id:
+                return entry
+        raise DashboardInstallError(
+            f"Nie znaleziono załadowanego wpisu integracji o id {entry_id}."
+        )
+    if len(loaded) == 1:
+        return loaded[0]
+    if not loaded:
+        raise DashboardInstallError("Integracja nie ma żadnego załadowanego wpisu.")
+    names = ", ".join(f"{e.title} ({e.entry_id})" for e in loaded)
+    raise DashboardInstallError(
+        f"Jest kilka wpisów integracji — podaj config_entry_id: {names}."
+    )
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

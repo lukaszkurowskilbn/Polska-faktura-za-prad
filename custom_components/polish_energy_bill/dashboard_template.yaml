@@ -1,0 +1,498 @@
+title: Rachunek za prąd
+views:
+  - title: Rachunek
+    path: rachunek
+    icon: mdi:cash-multiple
+    type: sections
+    max_columns: 2
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: Nowy okres z faktury
+            heading_style: title
+          - type: markdown
+            content: >
+              Wpisz dwie rzeczy z ostatniej faktury: **datę końcowego odczytu**
+              i **końcowe wskazanie licznika**. Dodatek pokaże narastający
+              rachunek bieżącego okresu: zużycie = bieżący licznik − wskazanie,
+              a opłaty stałe liczą się proporcjonalnie do czasu. Na kolejnej
+              fakturze zmieniasz tylko te dwa pola.
+          - type: entities
+            entities:
+              - entity: select.liczniki_rachunek_za_prad_tryb_zuzycia_okresu
+                name: Tryb (ustaw „Z faktury")
+              - entity: datetime.liczniki_rachunek_za_prad_punkt_zero_data_i_godzina_odczytu
+                name: Data końcowego odczytu z faktury
+              - entity: number.rachunek_za_prad_odczyt_zero_calodobowa
+                name: Końcowe wskazanie licznika z faktury
+          - type: tile
+            entity: sensor.rachunek_za_prad_do_zaplaty_brutto
+            name: Do zapłaty (prognoza, narastająco)
+            icon: mdi:cash-clock
+            color: red
+        column_span: 2
+      - type: grid
+        cards:
+          - type: heading
+            heading: Rozbicie pozycji (jak na fakturze)
+            heading_style: title
+          - type: markdown
+            content: >
+              {% set s = 'sensor.rachunek_za_prad_do_zaplaty_brutto' %}
+
+              {% set lines = state_attr(s, 'lines') or [] %}
+
+              {% set jm =
+              {'per_kwh':'kWh','per_mwh':'MWh','per_month':'mc','per_day':'dni','flat':'szt'}
+              %}
+
+              {% set mode = states('select.liczniki_rachunek_za_prad_tryb_zuzycia_okresu') %}
+
+              {% set zero = states('datetime.liczniki_rachunek_za_prad_punkt_zero_data_i_godzina_odczytu') %}
+
+              {% set d1 = states('date.liczniki_rachunek_za_prad_okres_od') %}
+
+              {% set d2 = states('date.liczniki_rachunek_za_prad_okres_do') %}
+
+              {% set bad = ['unknown','unavailable','none',''] %}
+
+              {% if ('Z faktury' in mode or 'Od odczytu' in mode) and zero not in bad %}
+
+              ### Okres: od odczytu {{ as_local(as_datetime(zero)).strftime('%d.%m.%Y') }} → teraz ({{ now().strftime('%d.%m.%Y') }})
+
+              {% elif 'Punkt zero' in mode %}
+
+              ### Okres: od punktu zero → teraz
+
+              {% elif d1 not in bad and d2 not in bad %}
+
+              ### Okres: {{ strptime(d1, '%Y-%m-%d').strftime('%d.%m.%Y') }} → {{ strptime(d2, '%Y-%m-%d').strftime('%d.%m.%Y') }}
+
+              {% endif %}
+
+              | Pozycja | Ilość | J.m. | Cena netto | Netto | VAT | Brutto |
+
+              |:--|--:|:--:|--:|--:|--:|--:|
+
+              {% for l in lines -%}
+
+              | {{ l.name }} | {{ '%.3f'|format(l.quantity)|replace('.',',') }}
+              | {{ jm.get(l.unit, l.unit) }} | {{
+              '%.5f'|format(l.rate)|replace('.',',') }} | {{
+              '%.2f'|format(l.net)|replace('.',',') }} | {{
+              (l.vat_rate*100)|round|int }}% | {{
+              '%.2f'|format(l.gross)|replace('.',',') }} |
+
+              {% endfor -%}
+
+              | **OGÓŁEM** | | | | **{{ '%.2f'|format(state_attr(s,'net') or
+              0)|replace('.',',') }}** | **{{ '%.2f'|format(state_attr(s,'vat')
+              or 0)|replace('.',',') }}** | **{{
+              '%.2f'|format(states(s)|float(0))|replace('.',',') }}** |
+            grid_options:
+              columns: full
+          - type: custom:apexcharts-card
+            chart_type: donut
+            header:
+              show: true
+              title: Rachunek brutto — wszystkie pozycje
+            apex_config:
+              legend:
+                position: bottom
+              dataLabels:
+                enabled: true
+            series:
+              - entity: sensor.rachunek_za_prad_za_energie_czynna
+                attribute: gross
+                name: Energia czynna
+              - entity: sensor.rachunek_za_prad_oplata_kogeneracyjna
+                attribute: gross
+                name: Kogeneracyjna
+              - entity: sensor.rachunek_za_prad_oplata_oze
+                attribute: gross
+                name: OZE
+              - entity: sensor.rachunek_za_prad_oplata_dystrybucyjna_sieciowa_zmienna
+                attribute: gross
+                name: Dystryb. sieciowa
+              - entity: >-
+                  sensor.rachunek_za_prad_oplata_dystrybucyjna_jakosciowa_zmienna
+                attribute: gross
+                name: Dystryb. jakościowa
+              - entity: sensor.rachunek_za_prad_oplata_stala_za_dystrybucje
+                attribute: gross
+                name: Opłata stała
+              - entity: sensor.rachunek_za_prad_abonament_dystrybucyjny
+                attribute: gross
+                name: Abonament
+              - entity: sensor.rachunek_za_prad_oplata_mocowa_stala
+                attribute: gross
+                name: Opłata mocowa
+        column_span: 2
+      - type: grid
+        cards:
+          - type: heading
+            heading: Za co płacę
+            heading_style: title
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: tile
+                entity: sensor.rachunek_za_prad_sprzedaz_energii_netto
+                name: Sprzedaż energii
+                icon: mdi:transmission-tower-export
+                color: blue
+              - type: tile
+                entity: sensor.rachunek_za_prad_dystrybucja_netto
+                name: Dystrybucja
+                icon: mdi:transmission-tower
+                color: purple
+              - type: tile
+                entity: sensor.rachunek_za_prad_koszt_energii_zmienny_brutto
+                name: Koszt zmienny (od zużycia)
+                icon: mdi:chart-line-variant
+              - type: tile
+                entity: sensor.rachunek_za_prad_oplaty_stale_brutto
+                name: Opłaty stałe (miesięczne)
+                icon: mdi:calendar-clock
+          - type: heading
+            heading: Ile płacę
+            heading_style: title
+          - type: tile
+            entity: sensor.rachunek_za_prad_do_zaplaty_brutto
+            name: Do zapłaty (brutto)
+            icon: mdi:cash
+            color: red
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: tile
+                entity: sensor.rachunek_za_prad_naleznosc_netto
+                name: Netto
+                icon: mdi:receipt-text-outline
+              - type: tile
+                entity: sensor.rachunek_za_prad_vat
+                name: VAT
+                icon: mdi:percent-outline
+              - type: tile
+                entity: sensor.rachunek_za_prad_zuzycie_w_rachunku
+                name: Zużycie
+                icon: mdi:flash
+              - type: tile
+                entity: sensor.rachunek_za_prad_koszt_1_kwh_brutto
+                name: Koszt 1 kWh
+                icon: mdi:tag-outline
+        column_span: 2
+      - type: grid
+        cards:
+          - type: heading
+            heading: Jak rosną koszty w czasie
+            heading_style: title
+          - type: custom:apexcharts-card
+            graph_span: 30d
+            header:
+              show: true
+              title: Koszt energii — dziennie (30 dni)
+              show_states: false
+            apex_config:
+              chart:
+                height: 240
+            series:
+              - entity: sensor.pge_total_energy_consumption
+                name: Koszt dzienny
+                type: column
+                unit: zł
+                statistics:
+                  type: change
+                  period: day
+                group_by:
+                  func: max
+                  duration: 1d
+                transform: >-
+                  const r =
+                  Number(hass.states['sensor.liczniki_rachunek_za_prad_stawka_zmienna_brutto']?.state);
+                  return x * (isFinite(r) && r > 0 ? r : 1.10);
+          - type: custom:apexcharts-card
+            graph_span: 30d
+            header:
+              show: true
+              title: Zużycie energii — dziennie (30 dni)
+            apex_config:
+              chart:
+                height: 240
+            series:
+              - entity: sensor.pge_total_energy_consumption
+                name: Zużycie dzienne
+                type: column
+                unit: kWh
+                statistics:
+                  type: change
+                  period: day
+                group_by:
+                  func: max
+                  duration: 1d
+          - type: custom:apexcharts-card
+            graph_span: 12w
+            header:
+              show: true
+              title: Koszt energii — tygodniowo (12 tygodni)
+            apex_config:
+              chart:
+                height: 240
+            series:
+              - entity: sensor.pge_total_energy_consumption
+                name: Koszt tygodniowy
+                type: column
+                unit: zł
+                statistics:
+                  type: change
+                  period: week
+                transform: >-
+                  const r =
+                  Number(hass.states['sensor.liczniki_rachunek_za_prad_stawka_zmienna_brutto']?.state);
+                  return x * (isFinite(r) && r > 0 ? r : 1.10);
+          - type: custom:apexcharts-card
+            graph_span: 12month
+            header:
+              show: true
+              title: Koszt energii — miesięcznie (12 miesięcy)
+            apex_config:
+              chart:
+                height: 240
+            series:
+              - entity: sensor.pge_total_energy_consumption
+                name: Koszt miesięczny
+                type: column
+                unit: zł
+                statistics:
+                  type: change
+                  period: month
+                transform: >-
+                  const r =
+                  Number(hass.states['sensor.liczniki_rachunek_za_prad_stawka_zmienna_brutto']?.state);
+                  return x * (isFinite(r) && r > 0 ? r : 1.10);
+        column_span: 2
+      - type: grid
+        cards:
+          - type: heading
+            heading: Ile w rachunku to ETS (CO₂)
+            heading_style: title
+          - type: markdown
+            content: >
+              {% set c =
+              'sensor.liczniki_rachunek_za_prad_ets_koszt_w_rachunku_brutto' %}
+
+              {% set pg = state_attr(c,'percent_gross')|float(0) %}
+
+              {% set eg = state_attr(c,'emission_gross')|float(0) %}
+
+              {% set pn = state_attr(c,'percent_net')|float(pg/1.23) %}
+
+              {% set pv = state_attr(c,'percent_vat')|float(pg-pn) %}
+
+              {% set en = state_attr(c,'emission_net')|float(eg/1.23) %}
+
+              {% set ev = state_attr(c,'emission_vat')|float(eg-en) %}
+
+              {% set en0 =
+              state_attr(c,'energy_net')|float(states('sensor.rachunek_za_prad_za_energie_czynna')|float(0))
+              %}
+
+              {% set bill =
+              state_attr(c,'bill_gross')|float(states('sensor.rachunek_za_prad_do_zaplaty_brutto')|float(0))
+              %}
+
+              {% set co2 = state_attr(c,'co2_kg')|float(0) %}
+
+              {% set m = state_attr(c,'method') %}
+
+              {% set ud =
+              states('number.liczniki_rachunek_za_prad_ets_udzial_w_cenie_energii')|float(0)
+              %}
+
+              {% set eua =
+              states('number.liczniki_rachunek_za_prad_ets_cena_uprawnienia_eua')|float(0)
+              %}
+
+              {% set kurs =
+              states('number.liczniki_rachunek_za_prad_ets_kurs_eur_pln')|float(0)
+              %}
+
+              {% set ps = (pg/bill*100) if bill>0 else 0 %}
+
+              {% set es = (eg/bill*100) if bill>0 else 0 %}
+
+              ### Rozbicie ETS — skąd się bierze koszt uprawnień CO₂
+
+              | Metoda | Podstawa | Netto | VAT | Brutto | Udział w rachunku |
+
+              |:--|:--|--:|--:|--:|--:|
+
+              | Udział % w cenie energii{{ ' — aktywna' if m=='procent' else ''
+              }} | energia czynna {{ '%.2f'|format(en0)|replace('.',',') }} zł ×
+              {{ '%.0f'|format(ud)|replace('.',',') }} % | {{
+              '%.2f'|format(pn)|replace('.',',') }} | {{
+              '%.2f'|format(pv)|replace('.',',') }} | **{{
+              '%.2f'|format(pg)|replace('.',',') }}** | {{
+              '%.1f'|format(ps)|replace('.',',') }} % |
+
+              | Emisja CO₂ × cena EUA × kurs{{ ' — aktywna' if m=='emisja' else
+              '' }} | {{ '%.1f'|format(co2)|replace('.',',') }} kg → {{
+              '%.2f'|format(eua)|replace('.',',') }} EUR/t × {{
+              '%.2f'|format(kurs)|replace('.',',') }} | {{
+              '%.2f'|format(en)|replace('.',',') }} | {{
+              '%.2f'|format(ev)|replace('.',',') }} | **{{
+              '%.2f'|format(eg)|replace('.',',') }}** | {{
+              '%.1f'|format(es)|replace('.',',') }} % |
+
+              | **Rachunek brutto** | | | | **{{
+              '%.2f'|format(bill)|replace('.',',') }}** | |
+
+
+              ETS jest zaszyty w cenie energii czynnej — to szacunek, nie osobna
+              pozycja faktury. Reszta rachunku (dystrybucja, opłaty stałe) nie
+              zawiera ETS, dlatego udział w całym rachunku jest mniejszy niż w
+              samej cenie energii.
+          - type: entities
+            title: Metoda i parametry ETS
+            entities:
+              - entity: select.liczniki_rachunek_za_prad_ets_metoda_liczenia
+                name: Metoda liczenia ETS
+              - entity: number.liczniki_rachunek_za_prad_ets_udzial_w_cenie_energii
+                name: Udział ETS w cenie energii (komunikat PGE)
+              - entity: number.liczniki_rachunek_za_prad_ets_cena_uprawnienia_eua
+                name: Cena uprawnienia EUA (rynek)
+              - entity: number.liczniki_rachunek_za_prad_ets_kurs_eur_pln
+                name: Kurs EUR/PLN
+              - entity: number.liczniki_rachunek_za_prad_ets_wskaznik_emisji_co2
+                name: Wskaźnik emisji CO₂
+          - type: grid
+            columns: 3
+            square: false
+            cards:
+              - type: tile
+                entity: sensor.liczniki_rachunek_za_prad_ets_koszt_w_rachunku_brutto
+                name: Koszt ETS (brutto)
+                icon: mdi:molecule-co2
+                color: deep-orange
+              - type: tile
+                entity: sensor.liczniki_rachunek_za_prad_ets_udzial_w_rachunku
+                name: Udział w rachunku
+                icon: mdi:chart-donut
+                color: deep-orange
+              - type: tile
+                entity: sensor.liczniki_rachunek_za_prad_ets_emisja_co2
+                name: Emisja CO₂
+                icon: mdi:cloud-outline
+                color: grey
+          - type: custom:apexcharts-card
+            chart_type: donut
+            header:
+              show: true
+              title: ETS vs reszta rachunku (brutto)
+            apex_config:
+              legend:
+                position: bottom
+              dataLabels:
+                enabled: true
+            series:
+              - entity: sensor.liczniki_rachunek_za_prad_ets_koszt_w_rachunku_brutto
+                name: ETS (CO₂)
+              - entity: sensor.rachunek_za_prad_do_zaplaty_brutto
+                name: Reszta rachunku
+                transform: >-
+                  return x -
+                  Number(hass.states['sensor.liczniki_rachunek_za_prad_ets_koszt_w_rachunku_brutto']?.state
+                  || 0);
+          - type: custom:apexcharts-card
+            graph_span: 30d
+            header:
+              show: true
+              title: Koszt ETS — dziennie (30 dni)
+              show_states: false
+            apex_config:
+              chart:
+                height: 240
+            series:
+              - entity: sensor.pge_total_energy_consumption
+                name: ETS dzienny
+                type: column
+                unit: zł
+                statistics:
+                  type: change
+                  period: day
+                group_by:
+                  func: max
+                  duration: 1d
+                transform: >-
+                  const r =
+                  Number(hass.states['sensor.liczniki_rachunek_za_prad_ets_stawka_brutto']?.state);
+                  return x * (isFinite(r) && r > 0 ? r : 0);
+        column_span: 2
+      - type: grid
+        cards:
+          - type: heading
+            heading: Zaawansowane — tryby i pola okresu
+            heading_style: title
+          - type: markdown
+            content: >
+              Normalnie wystarczy karta „Nowy okres z faktury" na górze. Poniżej
+              pełna kontrola, jeśli chcesz liczyć inaczej.
+
+              **Zakres dat i tryb.** Wybierz, jak liczyć zużycie w okresie: *Od
+              odczytu do teraz* (wpisujesz datę i godzinę odczytu z faktury —
+              koszt liczy się od tej chwili do teraz), *Auto z historii* (jawny
+              zakres dat), *Ręczne odczyty* (odczyt początkowy i końcowy) lub
+              *Punkt zero* (bieżący odczyt − wartość zero w kWh).
+          - type: entities
+            title: Zakres i tryb okresu
+            entities:
+              - entity: select.liczniki_rachunek_za_prad_tryb_zuzycia_okresu
+                name: Tryb zużycia
+              - entity: >-
+                  datetime.liczniki_rachunek_za_prad_punkt_zero_data_i_godzina_odczytu
+                name: Punkt zero — data i godzina odczytu
+              - entity: date.liczniki_rachunek_za_prad_okres_od
+                name: Okres od (tryb „zakres dat")
+              - entity: date.liczniki_rachunek_za_prad_okres_do
+                name: Okres do (tryb „zakres dat")
+              - entity: number.liczniki_rachunek_za_prad_odczyt_poczatkowy_calodobowa
+                name: Odczyt początkowy (tryb ręczny)
+              - entity: number.liczniki_rachunek_za_prad_odczyt_koncowy_calodobowa
+                name: Odczyt końcowy (tryb ręczny)
+          - type: entities
+            title: Punkt zero
+            entities:
+              - entity: button.rachunek_za_prad_ustaw_jako_zero_calodobowa
+                name: Ustaw bieżący odczyt jako zero
+              - entity: number.rachunek_za_prad_odczyt_zero_calodobowa
+                name: Odczyt zero (ręcznie)
+          - type: markdown
+            content: >
+              **Stawki** — zmień, gdy URE/sprzedawca podniesie ceny (encje
+              „Stawka: …"). Wartości netto, rachunek przeliczy się od razu.
+          - type: entities
+            title: Opłaty stałe i opłata mocowa
+            entities:
+              - entity: number.liczniki_rachunek_za_prad_oplaty_stale_liczba_miesiecy
+                name: Opłaty stałe — liczba miesięcy (0 = auto)
+                secondary_info: >-
+                  0 = auto: zamknięty zakres dat liczy pełne miesiące
+                  kalendarzowe, tryb bieżący — proporcjonalnie. Ustaw ręcznie,
+                  by wymusić (np. 2 jak na fakturze).
+              - entity: select.liczniki_rachunek_za_prad_oplata_mocowa_tryb
+                name: Opłata mocowa — tryb
+              - entity: number.liczniki_rachunek_za_prad_oplata_mocowa_zuzycie_roczne
+                name: Opłata mocowa — zużycie roczne (do auto-segmentu)
+          - type: markdown
+            content: >
+              **Opłata mocowa** dla domów jest ryczałtowa wg **rocznego
+              zużycia** (progi 500 / 1200 / 2800 kWh). W trybie *Auto* podaj
+              zużycie roczne (z faktury: „zużycie w roku poprzednim"), a dodatek
+              sam wybierze stawkę segmentu. Stawki segmentów (encje „Opłata
+              mocowa: stawka seg.1–4", domyślnie URE 2026: 4,29 / 10,31 / 17,18 /
+              24,05) zmień, gdy URE ogłosi nowe. W trybie *Ręcznie* działa jak
+              dotąd — pojedyncza „Stawka: opłata mocowa".
+        column_span: 2

@@ -35,5 +35,29 @@
         }
       }
     }
+  },
+  "services": {
+    "install_dashboard": {
+      "name": "Install dashboard",
+      "description": "Creates the “Rachunek za prąd” dashboard wired to this integration's entities (a one-time, editable copy). Does not overwrite an existing dashboard unless overwrite is set.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Config entry",
+          "description": "Only needed when you have several entries of this integration."
+        },
+        "url_path": {
+          "name": "URL path",
+          "description": "Dashboard address, e.g. rachunek-za-prad (must contain a hyphen)."
+        },
+        "title": {
+          "name": "Title",
+          "description": "Sidebar title. Defaults to “Rachunek za prąd”."
+        },
+        "overwrite": {
+          "name": "Overwrite existing",
+          "description": "Replaces the existing dashboard's config with a fresh one (manual edits are lost)."
+        }
+      }
+    }
   }
 }

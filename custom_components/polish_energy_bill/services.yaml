@@ -1,0 +1,22 @@
+install_dashboard:
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: polish_energy_bill
+    url_path:
+      required: false
+      default: rachunek-za-prad
+      example: rachunek-za-prad
+      selector:
+        text:
+    title:
+      required: false
+      selector:
+        text:
+    overwrite:
+      required: false
+      default: false
+      selector:
+        boolean:

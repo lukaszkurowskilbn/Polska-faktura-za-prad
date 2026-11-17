@@ -186,17 +186,35 @@ faktura 408000059008 ma „Opłata mocowa seg.4" = 24,05, bo roczne zużycie > 2
 
 ## Osobny panel (dashboard)
 
-W repo jest gotowy widok `dashboards/rachunek_za_prad.yaml` — osobny dashboard,
-który dodajesz do **paska bocznego** (jak „Energia"). Pokazuje rachunek prościej
-niż faktura: duże „Do zapłaty", podział sprzedaż/dystrybucja, koszt 1 kWh oraz
-wykresy kosztów **dzienny / tygodniowy / miesięczny**.
+Dodatek sam tworzy osobny dashboard w pasku bocznym (jak „Energia"). Pokazuje
+rachunek prościej niż faktura: duże „Do zapłaty", podział sprzedaż/dystrybucja,
+koszt 1 kWh oraz wykresy kosztów **dzienny / tygodniowy / miesięczny**.
 
-1. **Ustawienia → Dashboardy → Dodaj dashboard → „Nowy dashboard od zera"**;
-   nazwa „Rachunek za prąd", ikona `mdi:cash-multiple`, zaznacz *Pokaż w pasku bocznym*.
-2. Otwórz go → ⋮ → **Edytuj** → ⋮ → **Edytor surowej konfiguracji** → wklej plik.
+**Instalacja jednym kliknięciem:** urządzenie integracji → przycisk **„Zainstaluj
+dashboard"** (albo usługa `polish_energy_bill.install_dashboard`). Dostajesz
+zwykły, **edytowalny** dashboard `rachunek-za-prad` — to jednorazowa kopia, dodatek
+nie zmienia jej sam z siebie, więc Twoje przeróbki są bezpieczne.
 
-Wymaga karty **ApexCharts** (HACS → Frontend → `apexcharts-card`). W pliku są
-instrukcje i podmiana `entity_id`, jeśli nazwałeś instancję inaczej niż „Rachunek za prąd".
+- `entity_id` są brane z rejestru encji Twojej instalacji (nie zależą od nazwy
+  urządzenia). Karty, wiersze i serie wskazujące encje, których nie ma (np. wykresy
+  z licznika w trybie ręcznym), są pomijane zamiast zostawiać puste kafelki.
+- Istniejącego dashboardu przycisk **nie** nadpisuje. Żeby podmienić go na świeży
+  (Twoje ręczne zmiany w nim przepadną): usługa z `overwrite: true`; inny adres/tytuł:
+  pola `url_path`, `title`; kilka wpisów integracji: `config_entry_id`.
+- Po instalacji pojawia się powiadomienie z linkiem i listą ewentualnych braków
+  (m.in. brak zasobu `apexcharts-card`).
+- Gdy przyszła wersja HA zmieni wewnętrzne API Lovelace, dodatek niczego nie psuje:
+  zapisuje gotowy YAML do `polish_energy_bill_dashboard.yaml` w katalogu konfiguracji
+  i opisuje w powiadomieniu, jak go wkleić.
+
+Wymaga karty **ApexCharts** (Katalog społeczności / HACS → Frontend → `apexcharts-card`).
+
+**Ręcznie** (np. bez przycisku): plik `dashboards/rachunek_za_prad.yaml` wklejasz w
+**Ustawienia → Dashboardy → Dodaj dashboard → „Nowy dashboard od zera"** → ⋮ → **Edytuj** →
+⋮ → **Edytor surowej konfiguracji**. Jest w nim komplet `entity_id` z instalacji autora
+(`rachunek_za_prad_…` / `liczniki_rachunek_za_prad_…`) — przy innych nazwach użyj przycisku.
+(Kopia szablonu w pakiecie `custom_components/polish_energy_bill/dashboard_template.yaml`
+musi być identyczna — pilnuje tego test.)
 
 ## Profile w zestawie
 
@@ -211,10 +229,17 @@ instrukcje i podmiana `entity_id`, jeśli nazwałeś instancję inaczej niż „
 
 ```bash
 pip install -r requirements_test.txt
-pytest -q
+pytest -q                                   # rdzeń + generator dashboardu (bez HA)
+
+pip install -r requirements_test_ha.txt     # opcjonalnie: testy warstwy HA
+pytest -q                                   # + tests/ha (prawdziwy rdzeń HA)
 ```
 
 Rdzeń kalkulatora (`core/`) jest niezależny od Home Assistant i w pełni testowalny.
+Testy w `tests/ha` (instalacja dashboardu, przycisk, usługa) uruchamiają prawdziwy
+Home Assistant z `pytest-homeassistant-custom-component` — bez tej paczki są pomijane.
+Zostały przepuszczone na HA 2026.2.3; na nowszych wersjach wewnętrzne API Lovelace
+może się zmienić (wtedy te testy pierwsze to pokażą).
 
 ## Licencja
 

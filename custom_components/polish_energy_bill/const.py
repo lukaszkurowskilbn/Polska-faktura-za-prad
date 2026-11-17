@@ -70,3 +70,10 @@ POWER_FEE_MODES: Final = [POWER_FEE_MODE_MANUAL, POWER_FEE_MODE_AUTO]
 # Klucz pozycji opłaty mocowej (ten sam w G11/G12/G12w):
 POWER_FEE_POSITION_KEY: Final = "oplata_mocowa_stala"
 DEFAULT_POWER_FEE_ANNUAL_KWH: Final = 0.0  # 0 = nieustawione (użyj stawki ręcznej)
+
+# --- usługa: instalacja dashboardu ---------------------------------------
+SERVICE_INSTALL_DASHBOARD: Final = "install_dashboard"
+ATTR_CONFIG_ENTRY_ID: Final = "config_entry_id"
+ATTR_URL_PATH: Final = "url_path"
+ATTR_TITLE: Final = "title"
+ATTR_OVERWRITE: Final = "overwrite"
